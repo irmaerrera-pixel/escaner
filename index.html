@@ -99,7 +99,11 @@
     <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
     <div class="form-group">
       <label>Nombre</label>
-      <input type="text" id="genp-nombre" placeholder="Ej. María López (mamá de Juan Pérez)">
+      <input type="text" id="genp-nombre" placeholder="Ej. María López">
+    </div>
+    <div class="form-group">
+      <label>Parentesco (opcional)</label>
+      <input type="text" id="genp-parentesco" placeholder="Ej. Mamá, Papá, Tutor">
     </div>
     <div class="form-group">
       <label>Correo (opcional, para el envío automático más adelante)</label>
@@ -116,23 +120,23 @@
 
     <h3 style="margin-top:25px;">Códigos permanentes</h3>
     <table>
-      <thead><tr><th>Nombre</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
-      <tbody id="tabla-permanentes"><tr><td colspan="4">Cargando...</td></tr></tbody>
+      <thead><tr><th>Nombre</th><th>Parentesco</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-permanentes"><tr><td colspan="5">Cargando...</td></tr></tbody>
     </table>
 
     <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
 
     <h3 style="margin-top:25px;">Generar en lote (varios a la vez)</h3>
     <p style="font-size:0.85em; color:#495057; text-align:left;">
-      Pega un nombre por línea. Puedes agregar el correo separado por coma
-      (se guarda para cuando conectemos el envío automático):<br>
-      <code>Nombre, correo@ejemplo.com</code>
+      Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
+      una fila por alumno, en este orden:<br>
+      <code>Correo del alumno &nbsp;|&nbsp; Nombre de la mamá &nbsp;|&nbsp; Nombre del papá</code><br>
+      Se genera un QR para la mamá y otro para el papá por cada fila. Si falta un nombre, se omite ese QR.
     </p>
     <div class="form-group">
       <textarea id="lote-texto" rows="6" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
-        placeholder="María López, maria@correo.com
-Juan Ramírez, juan@correo.com
-Ana Torres"></textarea>
+        placeholder="alumno1@correo.com	María López	Juan Pérez
+alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     </div>
     <button id="btn-generar-lote" onclick="generarLote()">Generar todos</button>
     <button id="btn-descargar-lote" class="secondary" style="display:none;" onclick="descargarLoteZip()">Descargar todos (ZIP)</button>
@@ -432,6 +436,7 @@ Ana Torres"></textarea>
 
     function generarQRPermanente() {
       const nombre = document.getElementById('genp-nombre').value.trim();
+      const parentesco = document.getElementById('genp-parentesco').value.trim();
       const correo = document.getElementById('genp-correo').value.trim();
       const mensajeElem = document.getElementById('genp-mensaje');
       const boton = document.getElementById('btn-generar-permanente');
@@ -451,7 +456,7 @@ Ana Torres"></textarea>
       mensajeElem.innerText = 'Guardando...';
       mensajeElem.className = 'status normal';
 
-      db.collection('permanentes').add({ nombre: nombre, correo: correo || null, activo: true, creado: Date.now() })
+      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, correo: correo || null, activo: true, creado: Date.now() })
         .then(function (docRef) {
           const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
           const contenedor = document.getElementById('genp-qrcode');
@@ -495,6 +500,7 @@ Ana Torres"></textarea>
 
     function limpiarFormularioPermanente() {
       document.getElementById('genp-nombre').value = '';
+      document.getElementById('genp-parentesco').value = '';
       document.getElementById('genp-correo').value = '';
       document.getElementById('genp-qrcode').innerHTML = '';
       document.getElementById('genp-resultado').style.display = 'none';
@@ -503,7 +509,7 @@ Ana Torres"></textarea>
 
     function renderizarPermanentes() {
       const tbody = document.getElementById('tabla-permanentes');
-      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
 
       db.collection('permanentes').orderBy('creado', 'desc').get()
         .then(function (snap) {
@@ -516,13 +522,13 @@ Ana Torres"></textarea>
             const botonToggle = p.activo
               ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + doc.id + '\', true)">Desactivar</button>'
               : '<button class="small" onclick="toggleActivoPermanente(\'' + doc.id + '\', false)">Activar</button>';
-            filas.push('<tr><td>' + p.nombre + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
               '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
           });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">Aún no has generado códigos permanentes.</td></tr>';
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Aún no has generado códigos permanentes.</td></tr>';
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
         });
     }
 
@@ -560,33 +566,48 @@ Ana Torres"></textarea>
 
       const lineas = texto.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
       if (lineas.length === 0) {
-        mensajeElem.innerText = 'No se encontró ningún nombre válido.';
+        mensajeElem.innerText = 'No se encontró ninguna fila válida.';
         mensajeElem.className = 'status error';
         return;
       }
 
       boton.disabled = true;
       botonDescargar.style.display = 'none';
-      mensajeElem.innerText = 'Guardando ' + lineas.length + ' código(s) en la base de datos...';
-      mensajeElem.className = 'status normal';
       contenedorResultados.innerHTML = '';
       window.loteQRs = [];
 
-      // Prepara los documentos y sus IDs de antemano para poder incluir
-      // el ID dentro del contenido del QR
+      // Cada fila trae: correo del alumno, nombre de la mamá, nombre del papá.
+      // Detecta si viene separado por tabulador (al pegar de Excel) o por coma.
       const lote = db.batch();
       const personas = [];
 
       lineas.forEach(function (linea) {
-        const partes = linea.split(',');
-        const nombre = (partes[0] || '').trim();
-        const correo = (partes[1] || '').trim();
-        if (!nombre) return;
+        const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
+        const correo = (partes[0] || '').trim();
+        const nombreMama = (partes[1] || '').trim();
+        const nombrePapa = (partes[2] || '').trim();
 
-        const ref = db.collection('permanentes').doc();
-        lote.set(ref, { nombre: nombre, correo: correo || null, activo: true, creado: Date.now() });
-        personas.push({ id: ref.id, nombre: nombre, correo: correo });
+        if (nombreMama) {
+          const refMama = db.collection('permanentes').doc();
+          lote.set(refMama, { nombre: nombreMama, parentesco: 'Mamá', correo: correo || null, activo: true, creado: Date.now() });
+          personas.push({ id: refMama.id, nombre: nombreMama });
+        }
+        if (nombrePapa) {
+          const refPapa = db.collection('permanentes').doc();
+          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'Papá', correo: correo || null, activo: true, creado: Date.now() });
+          personas.push({ id: refPapa.id, nombre: nombrePapa });
+        }
       });
+
+      if (personas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ningún nombre de mamá o papá en las filas.';
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      mensajeElem.innerText = 'Guardando ' + personas.length + ' código(s) en la base de datos...';
+      mensajeElem.className = 'status normal';
 
       try {
         await lote.commit();
@@ -628,7 +649,7 @@ Ana Torres"></textarea>
           const canvas = qrDiv.querySelector('canvas');
           const img = qrDiv.querySelector('img');
           const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-          window.loteQRs.push({ nombre: persona.nombre, correo: persona.correo, dataUrl: dataUrl });
+          window.loteQRs.push({ nombre: persona.nombre, dataUrl: dataUrl });
 
           pendientes--;
           if (pendientes === 0) {
