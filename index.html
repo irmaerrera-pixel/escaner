@@ -17,6 +17,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
           onerror="var s=document.createElement('script');s.src='https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js';document.head.appendChild(s);">
   </script>
+  <!-- Generación de ZIP para lotes de QR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
     body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; text-align: center; }
@@ -99,6 +101,10 @@
       <label>Nombre</label>
       <input type="text" id="genp-nombre" placeholder="Ej. María López (mamá de Juan Pérez)">
     </div>
+    <div class="form-group">
+      <label>Correo (opcional, para el envío automático más adelante)</label>
+      <input type="email" id="genp-correo" placeholder="Ej. maria@correo.com">
+    </div>
     <button id="btn-generar-permanente" onclick="generarQRPermanente()">Generar QR Permanente</button>
     <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
 
@@ -110,9 +116,29 @@
 
     <h3 style="margin-top:25px;">Códigos permanentes</h3>
     <table>
-      <thead><tr><th>Nombre</th><th>Estado</th><th></th></tr></thead>
-      <tbody id="tabla-permanentes"><tr><td colspan="3">Cargando...</td></tr></tbody>
+      <thead><tr><th>Nombre</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-permanentes"><tr><td colspan="4">Cargando...</td></tr></tbody>
     </table>
+
+    <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+
+    <h3 style="margin-top:25px;">Generar en lote (varios a la vez)</h3>
+    <p style="font-size:0.85em; color:#495057; text-align:left;">
+      Pega un nombre por línea. Puedes agregar el correo separado por coma
+      (se guarda para cuando conectemos el envío automático):<br>
+      <code>Nombre, correo@ejemplo.com</code>
+    </p>
+    <div class="form-group">
+      <textarea id="lote-texto" rows="6" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
+        placeholder="María López, maria@correo.com
+Juan Ramírez, juan@correo.com
+Ana Torres"></textarea>
+    </div>
+    <button id="btn-generar-lote" onclick="generarLote()">Generar todos</button>
+    <button id="btn-descargar-lote" class="secondary" style="display:none;" onclick="descargarLoteZip()">Descargar todos (ZIP)</button>
+
+    <div id="lote-mensaje" class="status normal"></div>
+    <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
   </main>
 
   <!-- Vista Historial -->
@@ -406,6 +432,7 @@
 
     function generarQRPermanente() {
       const nombre = document.getElementById('genp-nombre').value.trim();
+      const correo = document.getElementById('genp-correo').value.trim();
       const mensajeElem = document.getElementById('genp-mensaje');
       const boton = document.getElementById('btn-generar-permanente');
 
@@ -424,7 +451,7 @@
       mensajeElem.innerText = 'Guardando...';
       mensajeElem.className = 'status normal';
 
-      db.collection('permanentes').add({ nombre: nombre, activo: true, creado: Date.now() })
+      db.collection('permanentes').add({ nombre: nombre, correo: correo || null, activo: true, creado: Date.now() })
         .then(function (docRef) {
           const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
           const contenedor = document.getElementById('genp-qrcode');
@@ -468,6 +495,7 @@
 
     function limpiarFormularioPermanente() {
       document.getElementById('genp-nombre').value = '';
+      document.getElementById('genp-correo').value = '';
       document.getElementById('genp-qrcode').innerHTML = '';
       document.getElementById('genp-resultado').style.display = 'none';
       document.getElementById('genp-mensaje').innerText = '';
@@ -475,7 +503,7 @@
 
     function renderizarPermanentes() {
       const tbody = document.getElementById('tabla-permanentes');
-      tbody.innerHTML = '<tr><td colspan="3">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
 
       db.collection('permanentes').orderBy('creado', 'desc').get()
         .then(function (snap) {
@@ -488,13 +516,13 @@
             const botonToggle = p.activo
               ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + doc.id + '\', true)">Desactivar</button>'
               : '<button class="small" onclick="toggleActivoPermanente(\'' + doc.id + '\', false)">Activar</button>';
-            filas.push('<tr><td>' + p.nombre + '</td><td>' + badge + '</td>' +
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
               '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
           });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="3">Aún no has generado códigos permanentes.</td></tr>';
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">Aún no has generado códigos permanentes.</td></tr>';
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="3">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
         });
     }
 
@@ -505,6 +533,133 @@
     function eliminarPermanente(id) {
       if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
       db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
+    }
+
+    // ============================================================
+    // GENERACIÓN EN LOTE (varios QR permanentes a la vez)
+    // ============================================================
+    window.loteQRs = []; // se llena al generar: [{nombre, correo, dataUrl}]
+
+    async function generarLote() {
+      const texto = document.getElementById('lote-texto').value.trim();
+      const mensajeElem = document.getElementById('lote-mensaje');
+      const contenedorResultados = document.getElementById('lote-resultados');
+      const boton = document.getElementById('btn-generar-lote');
+      const botonDescargar = document.getElementById('btn-descargar-lote');
+
+      if (!texto) {
+        mensajeElem.innerText = 'Pega al menos un nombre.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      const lineas = texto.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      if (lineas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ningún nombre válido.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      botonDescargar.style.display = 'none';
+      mensajeElem.innerText = 'Guardando ' + lineas.length + ' código(s) en la base de datos...';
+      mensajeElem.className = 'status normal';
+      contenedorResultados.innerHTML = '';
+      window.loteQRs = [];
+
+      // Prepara los documentos y sus IDs de antemano para poder incluir
+      // el ID dentro del contenido del QR
+      const lote = db.batch();
+      const personas = [];
+
+      lineas.forEach(function (linea) {
+        const partes = linea.split(',');
+        const nombre = (partes[0] || '').trim();
+        const correo = (partes[1] || '').trim();
+        if (!nombre) return;
+
+        const ref = db.collection('permanentes').doc();
+        lote.set(ref, { nombre: nombre, correo: correo || null, activo: true, creado: Date.now() });
+        personas.push({ id: ref.id, nombre: nombre, correo: correo });
+      });
+
+      try {
+        await lote.commit();
+      } catch (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      // Genera visualmente cada QR (para vista previa y para el ZIP)
+      let pendientes = personas.length;
+
+      personas.forEach(function (persona) {
+        const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:160px;';
+
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:0.8em; margin-top:4px; word-wrap:break-word;';
+        etiqueta.innerText = persona.nombre;
+        tarjeta.appendChild(etiqueta);
+
+        contenedorResultados.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: contenido, width: 130, height: 130,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        // La librería dibuja de forma síncrona, pero damos un pequeño margen
+        // para asegurar que el canvas ya existe antes de leerlo.
+        setTimeout(function () {
+          const canvas = qrDiv.querySelector('canvas');
+          const img = qrDiv.querySelector('img');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+          window.loteQRs.push({ nombre: persona.nombre, correo: persona.correo, dataUrl: dataUrl });
+
+          pendientes--;
+          if (pendientes === 0) {
+            mensajeElem.innerText = '✅ ' + personas.length + ' código(s) generado(s) y agregado(s) a permanentes.';
+            mensajeElem.className = 'status exito';
+            boton.disabled = false;
+            botonDescargar.style.display = 'inline-block';
+            renderizarPermanentes();
+          }
+        }, 60);
+      });
+    }
+
+    function descargarLoteZip() {
+      if (!window.loteQRs || window.loteQRs.length === 0) {
+        alert('Genera un lote primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.loteQRs.forEach(function (p) {
+        if (!p.dataUrl) return;
+        const base64 = p.dataUrl.split(',')[1];
+        const nombreArchivo = 'qr_' + p.nombre.replace(/\s+/g, '_') + '.png';
+        zip.file(nombreArchivo, base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'codigos_qr_permanentes.zip';
+        link.click();
+      });
     }
 
     // ============================================================
