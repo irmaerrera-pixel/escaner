@@ -71,7 +71,7 @@
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
     <nav id="menu-generar" style="margin-bottom:15px;">
-      <button onclick="navegarSubvista('subvista-fecha')">QR por Fecha (Alumnos)</button>
+      <button onclick="navegarSubvista('subvista-fecha')">QR por Fecha</button>
       <button onclick="navegarSubvista('subvista-permanente')">QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')">Generar en Lote</button>
     </nav>
@@ -141,9 +141,11 @@
         <button onclick="activarTodosPermanentes()">Activar todos</button>
         <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar todos</button>
       </div>
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <input type="email" id="buscar-correo" placeholder="Buscar por correo electrónico..." style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px;">
-        <button onclick="buscarPermanentesPorCorreo()">Buscar</button>
+      <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+        <input type="email" id="buscar-correo" placeholder="Correo..." style="flex:2; min-width:150px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        <input type="text" id="buscar-grupo" placeholder="Grupo..." style="flex:1; min-width:80px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        <input type="text" id="buscar-seccion" placeholder="Sección..." style="flex:1; min-width:80px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        <button onclick="filtrarPermanentes()">Filtrar</button>
         <button class="secondary" onclick="renderizarPermanentes()">Mostrar todos</button>
       </div>
       <table>
@@ -559,6 +561,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       tbody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
       const buscador = document.getElementById('buscar-correo');
       if (buscador) buscador.value = '';
+      const buscadorGrupo = document.getElementById('buscar-grupo');
+      if (buscadorGrupo) buscadorGrupo.value = '';
+      const buscadorSeccion = document.getElementById('buscar-seccion');
+      if (buscadorSeccion) buscadorSeccion.value = '';
 
       db.collection('permanentes').orderBy('creado', 'desc').get()
         .then(function (snap) {
@@ -587,11 +593,19 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin resultados.</td></tr>';
     }
 
-    function buscarPermanentesPorCorreo() {
-      const termino = document.getElementById('buscar-correo').value.trim().toLowerCase();
-      if (!termino) { dibujarTablaPermanentes_(permanentesCache); return; }
+    function filtrarPermanentes() {
+      const correo = document.getElementById('buscar-correo').value.trim().toLowerCase();
+      const grupo = document.getElementById('buscar-grupo').value.trim().toLowerCase();
+      const seccion = document.getElementById('buscar-seccion').value.trim().toLowerCase();
+
+      if (!correo && !grupo && !seccion) { dibujarTablaPermanentes_(permanentesCache); return; }
+
       const filtrados = permanentesCache.filter(function (item) {
-        return (item.datos.correo || '').toLowerCase().indexOf(termino) !== -1;
+        const p = item.datos;
+        const coincideCorreo = !correo || (p.correo || '').toLowerCase().indexOf(correo) !== -1;
+        const coincideGrupo = !grupo || (p.grupo || '').toLowerCase() === grupo;
+        const coincideSeccion = !seccion || (p.seccion || '').toLowerCase() === seccion;
+        return coincideCorreo && coincideGrupo && coincideSeccion;
       });
       dibujarTablaPermanentes_(filtrados);
     }
