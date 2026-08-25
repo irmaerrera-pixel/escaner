@@ -44,6 +44,10 @@
     .form-group input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
     #gen-resultado { display: none; margin-top: 15px; }
     #gen-qrcode { margin-top: 10px; display: flex; justify-content: center; }
+    #genp-resultado { display: none; margin-top: 15px; }
+    #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
+    .badge.activo { background: #d4edda; color: #155724; }
+    .badge.inactivo { background: #e9ecef; color: #495057; }
   </style>
 </head>
 <body>
@@ -85,6 +89,29 @@
     <table>
       <thead><tr><th>Nombre</th><th>Fecha</th><th></th></tr></thead>
       <tbody id="tabla-permitidos"><tr><td colspan="3">Cargando...</td></tr></tbody>
+    </table>
+
+    <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+
+    <h2 style="margin-top:25px;">Generar QR Permanente</h2>
+    <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="genp-nombre" placeholder="Ej. María López (mamá de Juan Pérez)">
+    </div>
+    <button id="btn-generar-permanente" onclick="generarQRPermanente()">Generar QR Permanente</button>
+    <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
+
+    <div id="genp-mensaje" class="status normal"></div>
+    <div id="genp-resultado">
+      <div id="genp-qrcode"></div><br>
+      <button onclick="descargarQRPermanente()" style="margin-top:10px;">Descargar QR</button>
+    </div>
+
+    <h3 style="margin-top:25px;">Códigos permanentes</h3>
+    <table>
+      <thead><tr><th>Nombre</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-permanentes"><tr><td colspan="3">Cargando...</td></tr></tbody>
     </table>
   </main>
 
@@ -143,7 +170,7 @@
       document.querySelectorAll('.vista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
-      if (vistaId === 'vista-generar') renderizarPermitidos();
+      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); }
     }
 
     // ============================================================
@@ -186,27 +213,41 @@
       el.className = 'status ' + clase;
     }
 
-    // Valida el QR y registra entrada/salida usando una transacción
-    // (evita choques si dos dispositivos escanean casi al mismo tiempo)
+    // Valida el QR (con fecha o permanente) y registra entrada/salida usando
+    // una transacción (evita choques si dos dispositivos escanean casi al
+    // mismo tiempo).
     async function procesarEscaneo(datosQR) {
       let datos;
       try {
         datos = JSON.parse(datosQR);
       } catch (e) {
-        await db.collection('registros').add({
-          nombre: 'Código no reconocido', fecha: '-', horaEntrada: null,
-          horaSalida: null, autorizado: false, creado: Date.now()
-        });
+        await registrarNoAutorizado_('Código no reconocido');
         return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
       }
 
+      // --- QR PERMANENTE (papás/tutores) ---
+      if (datos.tipo === 'permanente' && datos.id) {
+        const docPermanente = await db.collection('permanentes').doc(datos.id).get();
+
+        if (!docPermanente.exists) {
+          await registrarNoAutorizado_(datos.nombre || 'Código permanente inválido');
+          return { tipo: 'no_autorizado', mensaje: '⛔ Código no reconocido' };
+        }
+
+        const datosPermanente = docPermanente.data();
+        if (!datosPermanente.activo) {
+          await registrarNoAutorizado_(datosPermanente.nombre);
+          return { tipo: 'no_autorizado', mensaje: '⛔ Acceso desactivado: ' + datosPermanente.nombre };
+        }
+
+        return registrarEntradaSalida_(datosPermanente.nombre, fechaHoy());
+      }
+
+      // --- QR CON FECHA (alumnos) ---
       const nombre = datos.nombre;
       const fecha = datos.fecha;
       if (!nombre || !fecha) {
-        await db.collection('registros').add({
-          nombre: 'Código no reconocido', fecha: '-', horaEntrada: null,
-          horaSalida: null, autorizado: false, creado: Date.now()
-        });
+        await registrarNoAutorizado_('Código no reconocido');
         return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
       }
 
@@ -219,14 +260,22 @@
       const permitido = !snap.empty;
 
       if (!permitido || fecha !== hoy) {
-        await db.collection('registros').add({
-          nombre: nombre, fecha: '-', horaEntrada: null,
-          horaSalida: null, autorizado: false, creado: Date.now()
-        });
+        await registrarNoAutorizado_(nombre);
         const razon = !permitido ? 'no está en la lista' : 'su fecha permitida es ' + fecha;
         return { tipo: 'no_autorizado', mensaje: '⛔ No autorizado: ' + nombre + ' (' + razon + ')' };
       }
 
+      return registrarEntradaSalida_(nombre, fecha);
+    }
+
+    async function registrarNoAutorizado_(nombre) {
+      await db.collection('registros').add({
+        nombre: nombre, fecha: '-', horaEntrada: null,
+        horaSalida: null, autorizado: false, creado: Date.now()
+      });
+    }
+
+    function registrarEntradaSalida_(nombre, fecha) {
       const ref = db.collection('registros').doc(idRegistro(nombre, fecha));
       const hora = horaActual();
 
@@ -348,6 +397,114 @@
 
     function eliminarPermitido(id) {
       db.collection('permitidos').doc(id).delete().then(renderizarPermitidos);
+    }
+
+    // ============================================================
+    // QR PERMANENTE (papás / tutores)
+    // ============================================================
+    let qrPermanenteActual = null;
+
+    function generarQRPermanente() {
+      const nombre = document.getElementById('genp-nombre').value.trim();
+      const mensajeElem = document.getElementById('genp-mensaje');
+      const boton = document.getElementById('btn-generar-permanente');
+
+      if (!nombre) {
+        mensajeElem.innerText = 'Escribe un nombre.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Guardando...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('permanentes').add({ nombre: nombre, activo: true, creado: Date.now() })
+        .then(function (docRef) {
+          const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
+          const contenedor = document.getElementById('genp-qrcode');
+          contenedor.innerHTML = '';
+
+          new QRCode(contenedor, {
+            text: contenido, width: 220, height: 220,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+
+          document.getElementById('genp-resultado').style.display = 'block';
+          mensajeElem.innerText = 'QR permanente generado para: ' + nombre;
+          mensajeElem.className = 'status exito';
+          qrPermanenteActual = { nombre: nombre };
+          boton.disabled = false;
+          renderizarPermanentes();
+        })
+        .catch(function (error) {
+          mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+          mensajeElem.className = 'status error';
+          boton.disabled = false;
+        });
+    }
+
+    function descargarQRPermanente() {
+      const contenedor = document.getElementById('genp-qrcode');
+      const canvas = contenedor.querySelector('canvas');
+      const img = contenedor.querySelector('img');
+      const nombreArchivo = qrPermanenteActual
+        ? 'qr_permanente_' + qrPermanenteActual.nombre.replace(/\s+/g, '_') + '.png'
+        : 'qr_permanente.png';
+
+      const link = document.createElement('a');
+      link.download = nombreArchivo;
+      if (canvas) link.href = canvas.toDataURL('image/png');
+      else if (img) link.href = img.src;
+      else { alert('Genera un código QR primero.'); return; }
+      link.click();
+    }
+
+    function limpiarFormularioPermanente() {
+      document.getElementById('genp-nombre').value = '';
+      document.getElementById('genp-qrcode').innerHTML = '';
+      document.getElementById('genp-resultado').style.display = 'none';
+      document.getElementById('genp-mensaje').innerText = '';
+    }
+
+    function renderizarPermanentes() {
+      const tbody = document.getElementById('tabla-permanentes');
+      tbody.innerHTML = '<tr><td colspan="3">Cargando...</td></tr>';
+
+      db.collection('permanentes').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const p = doc.data();
+            const badge = p.activo
+              ? '<span class="badge activo">Activo</span>'
+              : '<span class="badge inactivo">Inactivo</span>';
+            const botonToggle = p.activo
+              ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + doc.id + '\', true)">Desactivar</button>'
+              : '<button class="small" onclick="toggleActivoPermanente(\'' + doc.id + '\', false)">Activar</button>';
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + badge + '</td>' +
+              '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="3">Aún no has generado códigos permanentes.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="3">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function toggleActivoPermanente(id, activoActual) {
+      db.collection('permanentes').doc(id).update({ activo: !activoActual }).then(renderizarPermanentes);
+    }
+
+    function eliminarPermanente(id) {
+      if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
+      db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
     }
 
     // ============================================================
