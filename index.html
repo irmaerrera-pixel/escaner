@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escáner - Control de Acceso</title>
+  <script src="https://unpkg.com/html5-qrcode"
+          onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';document.head.appendChild(s);">
+  </script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; text-align: center; }
+    .card { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+    #reader { width: 100%; margin-top: 10px; }
+    .status { margin-top: 15px; padding: 10px; font-weight: bold; border-radius: 4px; }
+    .status.normal { background: #e9ecef; color: #495057; }
+    .status.exito { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+
+  <main class="card">
+    <h2>Escanear Código QR</h2>
+    <div id="reader"></div>
+    <div id="status" class="status normal">Esperando escaneo...</div>
+  </main>
+
+  <script>
+    // ============================================================
+    // PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT
+    // (la que termina en /exec, la misma que usas para Generar QR)
+    // ============================================================
+    const API_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
+
+    let disponible = true;
+
+    function iniciarScanner() {
+      const scanner = new Html5QrcodeScanner("reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      }, false);
+      scanner.render(onScanSuccess);
+    }
+
+    function onScanSuccess(datosQR) {
+      if (!disponible) return;
+      disponible = false;
+      actualizarEstado('Verificando...', 'normal');
+
+      const url = API_URL + '?accion=procesarEscaneo&datosQR=' + encodeURIComponent(datosQR);
+
+      fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (resultado) {
+          if (resultado.error) {
+            actualizarEstado('⚠️ ' + resultado.error, 'error');
+          } else {
+            const clase = (resultado.tipo === 'entrada' || resultado.tipo === 'salida') ? 'exito' : 'error';
+            actualizarEstado(resultado.mensaje, clase);
+          }
+          reiniciarDisponibilidad();
+        })
+        .catch(function (err) {
+          actualizarEstado('⚠️ Error de conexión: ' + err.message, 'error');
+          reiniciarDisponibilidad();
+        });
+    }
+
+    function reiniciarDisponibilidad() {
+      setTimeout(function () {
+        disponible = true;
+        actualizarEstado('Esperando escaneo...', 'normal');
+      }, 3000);
+    }
+
+    function actualizarEstado(msg, clase) {
+      const elem = document.getElementById('status');
+      elem.innerText = msg;
+      elem.className = 'status ' + clase;
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      if (API_URL.indexOf('PEGA_AQUI') !== -1) {
+        actualizarEstado('⚠️ Falta configurar API_URL en el código de esta página.', 'error');
+        return;
+      }
+      iniciarScanner();
+    });
+  </script>
+</body>
+</html>
