@@ -138,8 +138,8 @@
 
       <h3 style="margin-top:25px;">Códigos permanentes</h3>
       <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
-        <button onclick="activarTodosPermanentes()">Activar todos</button>
-        <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar todos</button>
+        <button onclick="activarTodosPermanentes()">Activar visibles</button>
+        <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar visibles</button>
       </div>
       <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         <input type="email" id="buscar-correo" placeholder="Correo..." style="flex:2; min-width:150px; padding:8px; border:1px solid #ccc; border-radius:4px;">
@@ -555,6 +555,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     }
 
     let permanentesCache = [];
+    let permanentesVistaActual = [];
 
     function renderizarPermanentes() {
       const tbody = document.getElementById('tabla-permanentes');
@@ -578,6 +579,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     }
 
     function dibujarTablaPermanentes_(lista) {
+      permanentesVistaActual = lista;
       const tbody = document.getElementById('tabla-permanentes');
       const filas = lista.map(function (item) {
         const p = item.datos;
@@ -619,29 +621,42 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
     }
 
-    // Activa o desactiva TODOS los códigos permanentes de golpe
-    // (útil para eventos masivos). Firestore limita cada lote a 500
-    // operaciones, así que se divide en bloques si hay más.
+    // Activa o desactiva TODOS los códigos que están visibles actualmente
+    // en la tabla (si hay un filtro aplicado, solo afecta a ese bloque;
+    // si no hay filtro, afecta a todos). Útil para eventos masivos.
+    // Firestore limita cada lote a 500 operaciones, así que se divide en
+    // bloques si hay más.
     async function cambiarEstadoTodosPermanentes_(nuevoEstado) {
-      const snap = await db.collection('permanentes').get();
-      const docs = snap.docs;
-      if (docs.length === 0) return;
+      const items = permanentesVistaActual;
+      if (items.length === 0) return;
 
-      for (let i = 0; i < docs.length; i += 500) {
-        const bloque = docs.slice(i, i + 500);
+      for (let i = 0; i < items.length; i += 500) {
+        const bloque = items.slice(i, i + 500);
         const lote = db.batch();
-        bloque.forEach(function (doc) { lote.update(doc.ref, { activo: nuevoEstado }); });
+        bloque.forEach(function (item) {
+          lote.update(db.collection('permanentes').doc(item.id), { activo: nuevoEstado });
+        });
         await lote.commit();
       }
       renderizarPermanentes();
     }
 
     function activarTodosPermanentes() {
+      const cantidad = permanentesVistaActual.length;
+      if (cantidad === 0) return;
+      if (cantidad < permanentesCache.length) {
+        if (!confirm('¿Activar los ' + cantidad + ' código(s) que están filtrados actualmente?')) return;
+      }
       cambiarEstadoTodosPermanentes_(true);
     }
 
     function desactivarTodosPermanentes() {
-      if (!confirm('¿Desactivar TODOS los códigos permanentes? Ninguno funcionará hasta que los actives de nuevo.')) return;
+      const cantidad = permanentesVistaActual.length;
+      if (cantidad === 0) return;
+      const mensaje = cantidad < permanentesCache.length
+        ? '¿Desactivar los ' + cantidad + ' código(s) que están filtrados actualmente?'
+        : '¿Desactivar TODOS los códigos permanentes? Ninguno funcionará hasta que los actives de nuevo.';
+      if (!confirm(mensaje)) return;
       cambiarEstadoTodosPermanentes_(false);
     }
 
