@@ -3,35 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escáner - Control de Acceso</title>
+  <title>Sistema Control de Acceso</title>
+
+  <!-- Firebase (Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Escaneo de QR -->
   <script src="https://unpkg.com/html5-qrcode"
           onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';document.head.appendChild(s);">
   </script>
+  <!-- Generación de QR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+          onerror="var s=document.createElement('script');s.src='https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js';document.head.appendChild(s);">
+  </script>
+
   <style>
     body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; text-align: center; }
+    nav { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+    button { padding: 8px 16px; border: none; background: #00108E; color: white; border-radius: 4px; cursor: pointer; }
+    button.secondary { background: #6c757d; }
+    button.danger { background: #dc3545; }
+    button.small { padding: 4px 8px; font-size: 0.8em; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .card { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
     #reader { width: 100%; margin-top: 10px; }
     .status { margin-top: 15px; padding: 10px; font-weight: bold; border-radius: 4px; }
     .status.normal { background: #e9ecef; color: #495057; }
     .status.exito { background: #d4edda; color: #155724; }
     .status.error { background: #f8d7da; color: #721c24; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.85em; }
+    th { background-color: #f2f2f2; }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+    .badge.ok { background: #d4edda; color: #155724; }
+    .badge.no { background: #f8d7da; color: #721c24; }
+    .badge.pendiente { background: #fff3cd; color: #856404; }
+    .form-group { margin-bottom: 12px; text-align: left; }
+    .form-group label { display: block; font-size: 0.85em; margin-bottom: 4px; font-weight: bold; }
+    .form-group input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    #gen-resultado { display: none; margin-top: 15px; }
+    #gen-qrcode { margin-top: 10px; display: flex; justify-content: center; }
   </style>
 </head>
 <body>
 
-  <main class="card">
+  <nav>
+    <button onclick="navegarA('vista-escaner')">Escáner</button>
+    <button class="secondary" onclick="navegarA('vista-generar')">Generar QR</button>
+    <button class="secondary" onclick="navegarA('vista-historial')">Historial</button>
+  </nav>
+
+  <!-- Vista Escáner -->
+  <main id="vista-escaner" class="vista card">
     <h2>Escanear Código QR</h2>
     <div id="reader"></div>
     <div id="status" class="status normal">Esperando escaneo...</div>
   </main>
 
+  <!-- Vista Generar QR -->
+  <main id="vista-generar" class="vista card" style="display: none;">
+    <h2>Generar Código QR</h2>
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="gen-nombre" placeholder="Ej. Juan Pérez">
+    </div>
+    <div class="form-group">
+      <label>Fecha permitida de ingreso</label>
+      <input type="date" id="gen-fecha">
+    </div>
+    <button id="btn-generar" onclick="generarQR()">Generar QR</button>
+    <button class="secondary" onclick="limpiarFormulario()">Nuevo</button>
+
+    <div id="gen-mensaje" class="status normal"></div>
+    <div id="gen-resultado">
+      <div id="gen-qrcode"></div><br>
+      <button onclick="descargarQR()" style="margin-top:10px;">Descargar QR</button>
+    </div>
+
+    <h3 style="margin-top:25px;">Personas permitidas</h3>
+    <table>
+      <thead><tr><th>Nombre</th><th>Fecha</th><th></th></tr></thead>
+      <tbody id="tabla-permitidos"><tr><td colspan="3">Cargando...</td></tr></tbody>
+    </table>
+  </main>
+
+  <!-- Vista Historial -->
+  <main id="vista-historial" class="vista card" style="display: none;">
+    <h2>Registros de Entrada/Salida</h2>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button onclick="exportarCSV()">Exportar CSV</button>
+      <button class="danger" onclick="confirmarLimpiarHistorial()">Borrar Todo</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
+      </thead>
+      <tbody id="tabla-registros"><tr><td colspan="5">Cargando...</td></tr></tbody>
+    </table>
+  </main>
+
   <script>
     // ============================================================
-    // PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT
-    // (la que termina en /exec, la misma que usas para Generar QR)
+    // CONFIGURACIÓN DE FIREBASE (tu proyecto)
     // ============================================================
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyRBNCjt9lKtW72NgZ3prgxvEV9V2VRJw_GnDfFb3sSazhaRWZuQK09ib54JfmYXwc/exec';
+    const firebaseConfig = {
+      apiKey: "AIzaSyCUaJ-bRdZlBtCz1ba0cNzKVWBEl3abjb4",
+      authDomain: "control-acceso-9d08c.firebaseapp.com",
+      projectId: "control-acceso-9d08c",
+      storageBucket: "control-acceso-9d08c.firebasestorage.app",
+      messagingSenderId: "716537450455",
+      appId: "1:716537450455:web:d9d9c89af5458ecce98592"
+    };
 
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ============================================================
+    // UTILIDADES
+    // ============================================================
+    function fechaHoy() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function horaActual() {
+      return new Date().toLocaleTimeString();
+    }
+
+    // Convierte "nombre + fecha" en un ID de documento válido y único
+    function idRegistro(nombre, fecha) {
+      const limpio = nombre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      return limpio + '__' + fecha;
+    }
+
+    // ============================================================
+    // NAVEGACIÓN
+    // ============================================================
+    function navegarA(vistaId) {
+      document.querySelectorAll('.vista').forEach(function (v) { v.style.display = 'none'; });
+      document.getElementById(vistaId).style.display = 'block';
+      if (vistaId === 'vista-historial') renderizarHistorial();
+      if (vistaId === 'vista-generar') renderizarPermitidos();
+    }
+
+    // ============================================================
+    // ESCÁNER
+    // ============================================================
     let disponible = true;
 
     function iniciarScanner() {
@@ -47,45 +164,252 @@
       disponible = false;
       actualizarEstado('Verificando...', 'normal');
 
-      const url = API_URL + '?accion=procesarEscaneo&datosQR=' + encodeURIComponent(datosQR);
-
-      fetch(url)
-        .then(function (res) { return res.json(); })
+      procesarEscaneo(datosQR)
         .then(function (resultado) {
-          if (resultado.error) {
-            actualizarEstado('⚠️ ' + resultado.error, 'error');
-          } else {
-            const clase = (resultado.tipo === 'entrada' || resultado.tipo === 'salida') ? 'exito' : 'error';
-            actualizarEstado(resultado.mensaje, clase);
-          }
-          reiniciarDisponibilidad();
+          const clase = (resultado.tipo === 'entrada' || resultado.tipo === 'salida') ? 'exito' : 'error';
+          actualizarEstado(resultado.mensaje, clase);
         })
         .catch(function (err) {
-          actualizarEstado('⚠️ Error de conexión: ' + err.message, 'error');
-          reiniciarDisponibilidad();
+          actualizarEstado('⚠️ Error: ' + err.message, 'error');
+        })
+        .finally(function () {
+          setTimeout(function () {
+            disponible = true;
+            actualizarEstado('Esperando escaneo...', 'normal');
+          }, 3000);
         });
     }
 
-    function reiniciarDisponibilidad() {
-      setTimeout(function () {
-        disponible = true;
-        actualizarEstado('Esperando escaneo...', 'normal');
-      }, 3000);
-    }
-
     function actualizarEstado(msg, clase) {
-      const elem = document.getElementById('status');
-      elem.innerText = msg;
-      elem.className = 'status ' + clase;
+      const el = document.getElementById('status');
+      el.innerText = msg;
+      el.className = 'status ' + clase;
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-      if (API_URL.indexOf('PEGA_AQUI') !== -1) {
-        actualizarEstado('⚠️ Falta configurar API_URL en el código de esta página.', 'error');
+    // Valida el QR y registra entrada/salida usando una transacción
+    // (evita choques si dos dispositivos escanean casi al mismo tiempo)
+    async function procesarEscaneo(datosQR) {
+      let datos;
+      try {
+        datos = JSON.parse(datosQR);
+      } catch (e) {
+        await db.collection('registros').add({
+          nombre: 'Código no reconocido', fecha: '-', horaEntrada: null,
+          horaSalida: null, autorizado: false, creado: Date.now()
+        });
+        return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
+      }
+
+      const nombre = datos.nombre;
+      const fecha = datos.fecha;
+      if (!nombre || !fecha) {
+        await db.collection('registros').add({
+          nombre: 'Código no reconocido', fecha: '-', horaEntrada: null,
+          horaSalida: null, autorizado: false, creado: Date.now()
+        });
+        return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
+      }
+
+      const hoy = fechaHoy();
+      const snap = await db.collection('permitidos')
+        .where('nombre', '==', nombre)
+        .where('fecha', '==', fecha)
+        .limit(1)
+        .get();
+      const permitido = !snap.empty;
+
+      if (!permitido || fecha !== hoy) {
+        await db.collection('registros').add({
+          nombre: nombre, fecha: '-', horaEntrada: null,
+          horaSalida: null, autorizado: false, creado: Date.now()
+        });
+        const razon = !permitido ? 'no está en la lista' : 'su fecha permitida es ' + fecha;
+        return { tipo: 'no_autorizado', mensaje: '⛔ No autorizado: ' + nombre + ' (' + razon + ')' };
+      }
+
+      const ref = db.collection('registros').doc(idRegistro(nombre, fecha));
+      const hora = horaActual();
+
+      return db.runTransaction(async function (tx) {
+        const doc = await tx.get(ref);
+
+        if (!doc.exists) {
+          tx.set(ref, {
+            nombre: nombre, fecha: fecha, horaEntrada: hora,
+            horaSalida: null, autorizado: true, creado: Date.now()
+          });
+          return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
+        }
+
+        const datosDoc = doc.data();
+        if (!datosDoc.horaSalida) {
+          tx.update(ref, { horaSalida: hora });
+          return { tipo: 'salida', mensaje: '🚪 Salida registrada: ' + nombre + ' (' + hora + ')' };
+        }
+
+        return { tipo: 'completo', mensaje: '⚠️ ' + nombre + ' ya completó su entrada y salida hoy' };
+      });
+    }
+
+    // ============================================================
+    // GENERAR QR
+    // ============================================================
+    let qrActual = null;
+
+    function generarQR() {
+      const nombre = document.getElementById('gen-nombre').value.trim();
+      const fecha = document.getElementById('gen-fecha').value;
+      const mensajeElem = document.getElementById('gen-mensaje');
+      const boton = document.getElementById('btn-generar');
+
+      if (!nombre || !fecha) {
+        mensajeElem.innerText = 'Completa el nombre y la fecha.';
+        mensajeElem.className = 'status error';
         return;
       }
-      iniciarScanner();
-    });
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Guardando en la lista de permitidos...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('permitidos').add({ nombre: nombre, fecha: fecha, creado: Date.now() })
+        .then(function () {
+          const contenido = JSON.stringify({ nombre: nombre, fecha: fecha });
+          const contenedor = document.getElementById('gen-qrcode');
+          contenedor.innerHTML = '';
+
+          new QRCode(contenedor, {
+            text: contenido, width: 220, height: 220,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+
+          document.getElementById('gen-resultado').style.display = 'block';
+          mensajeElem.innerText = 'QR generado y agregado a permitidos: ' + nombre + ' (' + fecha + ')';
+          mensajeElem.className = 'status exito';
+          qrActual = { nombre: nombre, fecha: fecha };
+          boton.disabled = false;
+          renderizarPermitidos();
+        })
+        .catch(function (error) {
+          mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+          mensajeElem.className = 'status error';
+          boton.disabled = false;
+        });
+    }
+
+    function descargarQR() {
+      const contenedor = document.getElementById('gen-qrcode');
+      const canvas = contenedor.querySelector('canvas');
+      const img = contenedor.querySelector('img');
+      const nombreArchivo = qrActual
+        ? 'qr_' + qrActual.nombre.replace(/\s+/g, '_') + '_' + qrActual.fecha + '.png'
+        : 'codigo_qr.png';
+
+      const link = document.createElement('a');
+      link.download = nombreArchivo;
+      if (canvas) link.href = canvas.toDataURL('image/png');
+      else if (img) link.href = img.src;
+      else { alert('Genera un código QR primero.'); return; }
+      link.click();
+    }
+
+    function limpiarFormulario() {
+      document.getElementById('gen-nombre').value = '';
+      document.getElementById('gen-fecha').value = '';
+      document.getElementById('gen-qrcode').innerHTML = '';
+      document.getElementById('gen-resultado').style.display = 'none';
+      document.getElementById('gen-mensaje').innerText = '';
+    }
+
+    function renderizarPermitidos() {
+      const tbody = document.getElementById('tabla-permitidos');
+      tbody.innerHTML = '<tr><td colspan="3">Cargando...</td></tr>';
+
+      db.collection('permitidos').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const p = doc.data();
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + p.fecha + '</td>' +
+              '<td><button class="danger small" onclick="eliminarPermitido(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="3">Aún no has generado códigos.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="3">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function eliminarPermitido(id) {
+      db.collection('permitidos').doc(id).delete().then(renderizarPermitidos);
+    }
+
+    // ============================================================
+    // HISTORIAL
+    // ============================================================
+    function renderizarHistorial() {
+      const tbody = document.getElementById('tabla-registros');
+      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+
+      db.collection('registros').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const r = doc.data();
+            let badge;
+            if (!r.autorizado) badge = '<span class="badge no">No autorizado</span>';
+            else if (r.horaSalida) badge = '<span class="badge ok">Completo</span>';
+            else badge = '<span class="badge pendiente">Dentro</span>';
+
+            filas.push('<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
+              '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
+              '<td>' + badge + '</td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Sin registros aún.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function confirmarLimpiarHistorial() {
+      if (!confirm('¿Borrar todo el historial?')) return;
+      db.collection('registros').get().then(function (snap) {
+        const lote = db.batch();
+        snap.forEach(function (doc) { lote.delete(doc.ref); });
+        return lote.commit();
+      }).then(renderizarHistorial);
+    }
+
+    function exportarCSV() {
+      db.collection('registros').orderBy('creado', 'desc').get().then(function (snap) {
+        if (snap.empty) { alert('No hay registros para exportar.'); return; }
+        let csvContent = 'data:text/csv;charset=utf-8,ID,Nombre,Fecha,Hora Entrada,Hora Salida,Autorizado\n';
+        snap.forEach(function (doc) {
+          const r = doc.data();
+          const estado = r.autorizado ? 'SI' : 'NO';
+          csvContent += doc.id + ',"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',' + estado + '\n';
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', 'registros_' + new Date().toISOString().slice(0, 10) + '.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
+
+    // ============================================================
+    // INICIO
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', iniciarScanner);
   </script>
 </body>
 </html>
