@@ -50,8 +50,6 @@
     #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
     .badge.activo { background: #d4edda; color: #155724; }
     .badge.inactivo { background: #e9ecef; color: #495057; }
-    nav button.activo-tab { background: #00108E; }
-    nav button.secondary.activo-tab { background: #00108E; color: white; }
   </style>
 </head>
 <body>
@@ -72,14 +70,15 @@
   <!-- Vista Generar QR -->
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
-    <nav style="margin-bottom:15px;">
-      <button id="subnav-fecha" class="activo-tab" onclick="navegarSubvista('subvista-fecha')">QR por Fecha (Alumnos)</button>
-      <button id="subnav-permanente" class="secondary" onclick="navegarSubvista('subvista-permanente')">QR Permanente (Padres)</button>
-      <button id="subnav-lote" class="secondary" onclick="navegarSubvista('subvista-lote')">Generar en Lote</button>
+    <nav id="menu-generar" style="margin-bottom:15px;">
+      <button onclick="navegarSubvista('subvista-fecha')">QR por Fecha (Alumnos)</button>
+      <button onclick="navegarSubvista('subvista-permanente')">QR Permanente (Padres)</button>
+      <button onclick="navegarSubvista('subvista-lote')">Generar en Lote</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
-    <div id="subvista-fecha" class="subvista">
+    <div id="subvista-fecha" class="subvista" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
       <div class="form-group">
         <label>Nombre</label>
         <input type="text" id="gen-nombre" placeholder="Ej. Juan Pérez">
@@ -106,6 +105,7 @@
 
     <!-- Subvista: QR Permanente -->
     <div id="subvista-permanente" class="subvista" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
       <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
       <div class="form-group">
         <label>Nombre</label>
@@ -146,6 +146,7 @@
 
     <!-- Subvista: Generar en Lote -->
     <div id="subvista-lote" class="subvista" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
       <h3>Generar en lote (varios a la vez)</h3>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
@@ -221,16 +222,18 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
       document.querySelectorAll('.vista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
-      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); }
+      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
     }
 
     function navegarSubvista(subvistaId) {
+      document.getElementById('menu-generar').style.display = 'none';
       document.querySelectorAll('.subvista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(subvistaId).style.display = 'block';
+    }
 
-      document.querySelectorAll('#vista-generar nav button').forEach(function (b) { b.classList.remove('activo-tab'); });
-      const mapaBotones = { 'subvista-fecha': 'subnav-fecha', 'subvista-permanente': 'subnav-permanente', 'subvista-lote': 'subnav-lote' };
-      document.getElementById(mapaBotones[subvistaId]).classList.add('activo-tab');
+    function volverAlMenuGenerar() {
+      document.querySelectorAll('.subvista').forEach(function (v) { v.style.display = 'none'; });
+      document.getElementById('menu-generar').style.display = 'flex';
     }
 
     // ============================================================
@@ -819,7 +822,6 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     document.addEventListener('DOMContentLoaded', function () {
       iniciarScanner();
-      navegarSubvista('subvista-fecha');
     });
   </script>
 </body>
