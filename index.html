@@ -625,7 +625,7 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
         const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
 
         const tarjeta = document.createElement('div');
-        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:160px;';
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:280px;';
 
         const qrDiv = document.createElement('div');
         tarjeta.appendChild(qrDiv);
@@ -638,7 +638,7 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
         contenedorResultados.appendChild(tarjeta);
 
         new QRCode(qrDiv, {
-          text: contenido, width: 130, height: 130,
+          text: contenido, width: 260, height: 260,
           colorDark: '#000000', colorLight: '#ffffff',
           correctLevel: QRCode.CorrectLevel.M
         });
