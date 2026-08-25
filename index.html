@@ -116,6 +116,14 @@
         <input type="text" id="genp-parentesco" placeholder="Ej. Mamá, Papá, Tutor">
       </div>
       <div class="form-group">
+        <label>Grupo (opcional)</label>
+        <input type="text" id="genp-grupo" placeholder="Ej. 3">
+      </div>
+      <div class="form-group">
+        <label>Sección (opcional)</label>
+        <input type="text" id="genp-seccion" placeholder="Ej. A">
+      </div>
+      <div class="form-group">
         <label>Correo (opcional, para el envío automático más adelante)</label>
         <input type="email" id="genp-correo" placeholder="Ej. maria@correo.com">
       </div>
@@ -139,8 +147,8 @@
         <button class="secondary" onclick="renderizarPermanentes()">Mostrar todos</button>
       </div>
       <table>
-        <thead><tr><th>Nombre</th><th>Parentesco</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
-        <tbody id="tabla-permanentes"><tr><td colspan="5">Cargando...</td></tr></tbody>
+        <thead><tr><th>Nombre</th><th>Parentesco</th><th>Grupo</th><th>Sección</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-permanentes"><tr><td colspan="7">Cargando...</td></tr></tbody>
       </table>
     </div>
 
@@ -151,13 +159,13 @@
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
         una fila por alumno, en este orden:<br>
-        <code>Correo del alumno &nbsp;|&nbsp; Nombre de la mamá &nbsp;|&nbsp; Nombre del papá</code><br>
+        <code>Correo del alumno &nbsp;|&nbsp; Grupo &nbsp;|&nbsp; Sección &nbsp;|&nbsp; Nombre de la mamá &nbsp;|&nbsp; Nombre del papá</code><br>
         Se genera un QR para la mamá y otro para el papá por cada fila. Si falta un nombre, se omite ese QR.
       </p>
       <div class="form-group">
         <textarea id="lote-texto" rows="6" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
-          placeholder="alumno1@correo.com	María López	Juan Pérez
-alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
+          placeholder="alumno1@correo.com	3	A	María López	Juan Pérez
+alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </div>
       <button id="btn-generar-lote" onclick="generarLote()">Generar todos</button>
       <button id="btn-descargar-lote" class="secondary" style="display:none;" onclick="descargarLoteZip()">Descargar todos (ZIP)</button>
@@ -470,6 +478,8 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     function generarQRPermanente() {
       const nombre = document.getElementById('genp-nombre').value.trim();
       const parentesco = document.getElementById('genp-parentesco').value.trim();
+      const grupo = document.getElementById('genp-grupo').value.trim();
+      const seccion = document.getElementById('genp-seccion').value.trim();
       const correo = document.getElementById('genp-correo').value.trim();
       const mensajeElem = document.getElementById('genp-mensaje');
       const boton = document.getElementById('btn-generar-permanente');
@@ -489,7 +499,7 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
       mensajeElem.innerText = 'Guardando...';
       mensajeElem.className = 'status normal';
 
-      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, correo: correo || null, activo: true, creado: Date.now() })
+      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, grupo: grupo || null, seccion: seccion || null, correo: correo || null, activo: true, creado: Date.now() })
         .then(function (docRef) {
           const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
           const contenedor = document.getElementById('genp-qrcode');
@@ -534,6 +544,8 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     function limpiarFormularioPermanente() {
       document.getElementById('genp-nombre').value = '';
       document.getElementById('genp-parentesco').value = '';
+      document.getElementById('genp-grupo').value = '';
+      document.getElementById('genp-seccion').value = '';
       document.getElementById('genp-correo').value = '';
       document.getElementById('genp-qrcode').innerHTML = '';
       document.getElementById('genp-resultado').style.display = 'none';
@@ -544,7 +556,7 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
 
     function renderizarPermanentes() {
       const tbody = document.getElementById('tabla-permanentes');
-      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
       const buscador = document.getElementById('buscar-correo');
       if (buscador) buscador.value = '';
 
@@ -569,10 +581,10 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
         const botonToggle = p.activo
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
-        return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
+        return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.grupo || '-') + '</td><td>' + (p.seccion || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
           '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
       });
-      tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Sin resultados.</td></tr>';
+      tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin resultados.</td></tr>';
     }
 
     function buscarPermanentesPorCorreo() {
@@ -662,17 +674,19 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
       lineas.forEach(function (linea) {
         const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
         const correo = (partes[0] || '').trim();
-        const nombreMama = (partes[1] || '').trim();
-        const nombrePapa = (partes[2] || '').trim();
+        const grupo = (partes[1] || '').trim();
+        const seccion = (partes[2] || '').trim();
+        const nombreMama = (partes[3] || '').trim();
+        const nombrePapa = (partes[4] || '').trim();
 
         if (nombreMama) {
           const refMama = db.collection('permanentes').doc();
-          lote.set(refMama, { nombre: nombreMama, parentesco: 'Mamá', correo: correo || null, activo: true, creado: Date.now() });
+          lote.set(refMama, { nombre: nombreMama, parentesco: 'Mamá', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
           personas.push({ id: refMama.id, nombre: nombreMama });
         }
         if (nombrePapa) {
           const refPapa = db.collection('permanentes').doc();
-          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'Papá', correo: correo || null, activo: true, creado: Date.now() });
+          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'Papá', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
           personas.push({ id: refPapa.id, nombre: nombrePapa });
         }
       });
