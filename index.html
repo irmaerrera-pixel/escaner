@@ -143,8 +143,12 @@
       </div>
       <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         <input type="email" id="buscar-correo" placeholder="Correo..." style="flex:2; min-width:150px; padding:8px; border:1px solid #ccc; border-radius:4px;">
-        <input type="text" id="buscar-grupo" placeholder="Grupo..." style="flex:1; min-width:80px; padding:8px; border:1px solid #ccc; border-radius:4px;">
-        <input type="text" id="buscar-seccion" placeholder="Sección..." style="flex:1; min-width:80px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        <select id="buscar-grupo" style="flex:1; min-width:100px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+          <option value="">Grupo (todos)</option>
+        </select>
+        <select id="buscar-seccion" style="flex:1; min-width:100px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+          <option value="">Sección (todas)</option>
+        </select>
         <button onclick="filtrarPermanentes()">Filtrar</button>
         <button class="secondary" onclick="renderizarPermanentes()">Mostrar todos</button>
       </div>
@@ -571,11 +575,35 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         .then(function (snap) {
           permanentesCache = [];
           snap.forEach(function (doc) { permanentesCache.push({ id: doc.id, datos: doc.data() }); });
+          poblarFiltrosGrupoSeccion_();
           dibujarTablaPermanentes_(permanentesCache);
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7">Error: ' + error.message + '</td></tr>';
         });
+    }
+
+    // Llena los menús desplegables de Grupo y Sección con los valores
+    // que realmente existen en los códigos ya generados.
+    function poblarFiltrosGrupoSeccion_() {
+      const grupos = new Set();
+      const secciones = new Set();
+      permanentesCache.forEach(function (item) {
+        if (item.datos.grupo) grupos.add(item.datos.grupo);
+        if (item.datos.seccion) secciones.add(item.datos.seccion);
+      });
+
+      const selectGrupo = document.getElementById('buscar-grupo');
+      const valorGrupoActual = selectGrupo.value;
+      selectGrupo.innerHTML = '<option value="">Grupo (todos)</option>' +
+        Array.from(grupos).sort().map(function (g) { return '<option value="' + g + '">' + g + '</option>'; }).join('');
+      selectGrupo.value = valorGrupoActual;
+
+      const selectSeccion = document.getElementById('buscar-seccion');
+      const valorSeccionActual = selectSeccion.value;
+      selectSeccion.innerHTML = '<option value="">Sección (todas)</option>' +
+        Array.from(secciones).sort().map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+      selectSeccion.value = valorSeccionActual;
     }
 
     function dibujarTablaPermanentes_(lista) {
