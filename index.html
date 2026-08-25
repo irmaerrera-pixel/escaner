@@ -119,6 +119,10 @@
     </div>
 
     <h3 style="margin-top:25px;">Códigos permanentes</h3>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+      <button onclick="activarTodosPermanentes()">Activar todos</button>
+      <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar todos</button>
+    </div>
     <table>
       <thead><tr><th>Nombre</th><th>Parentesco</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
       <tbody id="tabla-permanentes"><tr><td colspan="5">Cargando...</td></tr></tbody>
@@ -539,6 +543,32 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     function eliminarPermanente(id) {
       if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
       db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
+    }
+
+    // Activa o desactiva TODOS los códigos permanentes de golpe
+    // (útil para eventos masivos). Firestore limita cada lote a 500
+    // operaciones, así que se divide en bloques si hay más.
+    async function cambiarEstadoTodosPermanentes_(nuevoEstado) {
+      const snap = await db.collection('permanentes').get();
+      const docs = snap.docs;
+      if (docs.length === 0) return;
+
+      for (let i = 0; i < docs.length; i += 500) {
+        const bloque = docs.slice(i, i + 500);
+        const lote = db.batch();
+        bloque.forEach(function (doc) { lote.update(doc.ref, { activo: nuevoEstado }); });
+        await lote.commit();
+      }
+      renderizarPermanentes();
+    }
+
+    function activarTodosPermanentes() {
+      cambiarEstadoTodosPermanentes_(true);
+    }
+
+    function desactivarTodosPermanentes() {
+      if (!confirm('¿Desactivar TODOS los códigos permanentes? Ninguno funcionará hasta que los actives de nuevo.')) return;
+      cambiarEstadoTodosPermanentes_(false);
     }
 
     // ============================================================
