@@ -584,8 +584,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       const filas = lista.map(function (item) {
         const p = item.datos;
         const badge = p.activo
-          ? '<span class="badge activo">Activo</span>'
-          : '<span class="badge inactivo">Inactivo</span>';
+          ? '<span class="badge activo">Activado</span>'
+          : '<span class="badge inactivo">Desactivado</span>';
         const botonToggle = p.activo
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
