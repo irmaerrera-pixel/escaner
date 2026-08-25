@@ -817,7 +817,10 @@ alumno2@correo.com	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     // INICIO
     // ============================================================
-    document.addEventListener('DOMContentLoaded', iniciarScanner);
+    document.addEventListener('DOMContentLoaded', function () {
+      iniciarScanner();
+      navegarSubvista('subvista-fecha');
+    });
   </script>
 </body>
 </html>
