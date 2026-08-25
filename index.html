@@ -57,12 +57,14 @@
   <nav>
     <button onclick="navegarA('vista-escaner')">Escáner</button>
     <button class="secondary" onclick="navegarA('vista-generar')">Generar QR</button>
+    <button class="secondary" onclick="navegarA('vista-citas')">Agendar Cita</button>
     <button class="secondary" onclick="navegarA('vista-historial')">Historial</button>
   </nav>
 
   <!-- Vista Escáner -->
   <main id="vista-escaner" class="vista card">
     <h2>Escanear Código QR</h2>
+    <div id="modo-escaner" style="font-size:0.85em; color:#495057; margin-bottom:5px;"></div>
     <div id="reader"></div>
     <div id="status" class="status normal">Esperando escaneo...</div>
   </main>
@@ -181,6 +183,46 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     </div>
   </main>
 
+  <!-- Vista Agendar Cita -->
+  <main id="vista-citas" class="vista card" style="display: none;">
+    <h2>Agendar Cita</h2>
+    <p style="font-size:0.85em; color:#495057;">
+      El código QR del papá/mamá asociado al correo del alumno se activará
+      automáticamente 10 minutos antes de la hora de la cita.
+    </p>
+    <div class="form-group">
+      <label>Nombre del alumno</label>
+      <input type="text" id="cita-nombre-alumno" placeholder="Ej. Juan Pérez">
+    </div>
+    <div class="form-group">
+      <label>Correo del alumno</label>
+      <input type="email" id="cita-correo-alumno" placeholder="Ej. alumno@correo.com">
+    </div>
+    <div class="form-group">
+      <label>Fecha</label>
+      <input type="date" id="cita-fecha">
+    </div>
+    <div class="form-group">
+      <label>Hora</label>
+      <input type="time" id="cita-hora">
+    </div>
+    <div class="form-group">
+      <label>Persona a quien visita</label>
+      <input type="text" id="cita-visita" placeholder="Ej. Orientación, Trabajo Social, Prefecto...">
+    </div>
+    <button id="btn-agendar-cita" onclick="agendarCita()">Agendar Cita</button>
+
+    <div id="cita-mensaje" class="status normal"></div>
+
+    <h3 style="margin-top:25px;">Citas agendadas</h3>
+    <table>
+      <thead>
+        <tr><th>Alumno</th><th>Fecha</th><th>Hora</th><th>Visita a</th><th>QR Padre</th><th></th></tr>
+      </thead>
+      <tbody id="tabla-citas"><tr><td colspan="6">Cargando...</td></tr></tbody>
+    </table>
+  </main>
+
   <!-- Vista Historial -->
   <main id="vista-historial" class="vista card" style="display: none;">
     <h2>Registros de Entrada/Salida</h2>
@@ -237,6 +279,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
+      if (vistaId === 'vista-citas') renderizarCitas();
     }
 
     function navegarSubvista(subvistaId) {
@@ -256,6 +299,16 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     let disponible = true;
 
     function iniciarScanner() {
+      const modo = modoForzado_();
+      const modoElem = document.getElementById('modo-escaner');
+      if (modo === 'entrada') {
+        modoElem.innerText = '🔵 Modo fijo: SOLO ENTRADA';
+      } else if (modo === 'salida') {
+        modoElem.innerText = '🟠 Modo fijo: SOLO SALIDA';
+      } else {
+        modoElem.innerText = 'Modo automático (entrada/salida)';
+      }
+
       const scanner = new Html5QrcodeScanner("reader", {
         fps: 10,
         qrbox: { width: 250, height: 250 }
@@ -352,17 +405,39 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       });
     }
 
+    // Lee el parámetro ?modo=entrada o ?modo=salida de la URL.
+    // Sin ese parámetro, funciona en modo automático (como hasta ahora):
+    // primer escaneo del día = entrada, segundo = salida.
+    function modoForzado_() {
+      const parametros = new URLSearchParams(window.location.search);
+      const modo = parametros.get('modo');
+      return (modo === 'entrada' || modo === 'salida') ? modo : null;
+    }
+
     function registrarEntradaSalida_(nombre, fecha) {
+      const modo = modoForzado_();
       const ref = db.collection('registros').doc(idRegistro(nombre, fecha));
       const hora = horaActual();
 
       return db.runTransaction(async function (tx) {
         const doc = await tx.get(ref);
+        const creado = doc.exists ? doc.data().creado : Date.now();
 
+        if (modo === 'entrada') {
+          tx.set(ref, { nombre: nombre, fecha: fecha, horaEntrada: hora, autorizado: true, creado: creado }, { merge: true });
+          return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
+        }
+
+        if (modo === 'salida') {
+          tx.set(ref, { nombre: nombre, fecha: fecha, horaSalida: hora, autorizado: true, creado: creado }, { merge: true });
+          return { tipo: 'salida', mensaje: '🚪 Salida registrada: ' + nombre + ' (' + hora + ')' };
+        }
+
+        // Modo automático (comportamiento original)
         if (!doc.exists) {
           tx.set(ref, {
             nombre: nombre, fecha: fecha, horaEntrada: hora,
-            horaSalida: null, autorizado: true, creado: Date.now()
+            horaSalida: null, autorizado: true, creado: creado
           });
           return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
         }
@@ -889,10 +964,125 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     }
 
     // ============================================================
+    // AGENDAR CITAS
+    // ============================================================
+    function agendarCita() {
+      const nombreAlumno = document.getElementById('cita-nombre-alumno').value.trim();
+      const correoAlumno = document.getElementById('cita-correo-alumno').value.trim();
+      const fecha = document.getElementById('cita-fecha').value;
+      const hora = document.getElementById('cita-hora').value;
+      const visita = document.getElementById('cita-visita').value.trim();
+      const mensajeElem = document.getElementById('cita-mensaje');
+      const boton = document.getElementById('btn-agendar-cita');
+
+      if (!nombreAlumno || !correoAlumno || !fecha || !hora || !visita) {
+        mensajeElem.innerText = 'Completa todos los campos.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Guardando cita...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('citas').add({
+        nombreAlumno: nombreAlumno, correoAlumno: correoAlumno,
+        fecha: fecha, hora: hora, visita: visita,
+        activada: false, creado: Date.now()
+      }).then(function () {
+        mensajeElem.innerText = '✅ Cita agendada para ' + nombreAlumno + ' el ' + fecha + ' a las ' + hora + '.';
+        mensajeElem.className = 'status exito';
+        document.getElementById('cita-nombre-alumno').value = '';
+        document.getElementById('cita-correo-alumno').value = '';
+        document.getElementById('cita-fecha').value = '';
+        document.getElementById('cita-hora').value = '';
+        document.getElementById('cita-visita').value = '';
+        boton.disabled = false;
+        renderizarCitas();
+      }).catch(function (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+      });
+    }
+
+    function renderizarCitas() {
+      const tbody = document.getElementById('tabla-citas');
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+
+      db.collection('citas').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const c = doc.data();
+            const badge = c.activada
+              ? '<span class="badge activo">Activado</span>'
+              : '<span class="badge pendiente">Pendiente</span>';
+            filas.push('<tr><td>' + c.nombreAlumno + '</td><td>' + c.fecha + '</td><td>' + c.hora + '</td>' +
+              '<td>' + c.visita + '</td><td>' + badge + '</td>' +
+              '<td><button class="danger small" onclick="eliminarCita(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="6">Sin citas agendadas.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="6">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function eliminarCita(id) {
+      if (!confirm('¿Eliminar esta cita?')) return;
+      db.collection('citas').doc(id).delete().then(renderizarCitas);
+    }
+
+    // Revisa cada minuto si hay citas cuya hora de activación (10 minutos
+    // antes de la cita) ya llegó, y activa el QR permanente del papá/mamá
+    // asociado (buscado por el correo del alumno). Corre mientras la app
+    // esté abierta, sin importar en qué pestaña esté el usuario.
+    async function revisarCitasPendientes_() {
+      try {
+        const snap = await db.collection('citas').where('activada', '==', false).get();
+        if (snap.empty) return;
+
+        const ahora = Date.now();
+
+        for (const doc of snap.docs) {
+          const c = doc.data();
+          const momentoCita = new Date(c.fecha + 'T' + c.hora).getTime();
+          const momentoActivacion = momentoCita - 10 * 60 * 1000;
+
+          if (ahora >= momentoActivacion) {
+            const permitidosSnap = await db.collection('permanentes')
+              .where('correo', '==', c.correoAlumno)
+              .get();
+
+            if (!permitidosSnap.empty) {
+              const lote = db.batch();
+              permitidosSnap.forEach(function (p) { lote.update(p.ref, { activo: true }); });
+              lote.update(doc.ref, { activada: true });
+              await lote.commit();
+            } else {
+              // No hay QR permanente ligado a ese correo; marca la cita
+              // como procesada de todas formas para no reintentarla en bucle.
+              await doc.ref.update({ activada: true });
+            }
+          }
+        }
+
+        // Si la vista de citas o de permanentes está abierta, refresca lo visible.
+        if (document.getElementById('vista-citas').style.display !== 'none') renderizarCitas();
+        if (document.getElementById('vista-generar').style.display !== 'none') renderizarPermanentes();
+      } catch (e) {
+        console.error('Error revisando citas pendientes:', e);
+      }
+    }
+
+    // ============================================================
     // INICIO
     // ============================================================
     document.addEventListener('DOMContentLoaded', function () {
       iniciarScanner();
+      revisarCitasPendientes_();
+      setInterval(revisarCitasPendientes_, 60000);
     });
   </script>
 </body>
