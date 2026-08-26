@@ -155,6 +155,18 @@
     .status.exito { background: var(--verde-bg); color: var(--verde); border: 1px solid rgba(46,125,50,0.25); }
     .status.error { background: var(--rojo-bg); color: var(--rojo); border: 1px solid rgba(211,47,47,0.25); }
 
+    /* El resultado de cada escaneo (Entrada/Salida/Rechazado) aparece
+       centrado en medio de la pantalla, bien visible. */
+    .status.overlay-centrado {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      min-width: 260px;
+      max-width: 90vw;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
     table {
       width: 100%; border-collapse: separate; border-spacing: 0;
       margin-top: 15px; border-radius: 10px; overflow: hidden;
@@ -739,21 +751,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         modoElem.innerText = 'Modo automático (entrada/salida)';
       }
 
-      // Usamos Html5Qrcode (no Html5QrcodeScanner) para poder arrancar
-      // directo con la cámara trasera, sin mostrar ningún menú de
-      // selección de cámara ni botón de "solicitar permiso".
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-      const scannerHtml5 = new Html5Qrcode("reader");
-
-      scannerHtml5.start({ facingMode: 'environment' }, config, onScanSuccess, function () {})
-        .catch(function () {
-          // Si no hay cámara trasera (ej. una laptop de prueba), usa la
-          // que esté disponible.
-          scannerHtml5.start({ facingMode: 'user' }, config, onScanSuccess, function () {})
-            .catch(function (error) {
-              actualizarEstado('⚠️ No se pudo iniciar la cámara: ' + error, 'error');
-            });
-        });
+      // Usamos el escáner con menú de selección de cámara (versión estable).
+      const scanner = new Html5QrcodeScanner("reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      }, false);
+      scanner.render(onScanSuccess);
     }
 
     function onScanSuccess(datosQR) {
@@ -780,7 +783,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function actualizarEstado(msg, clase) {
       const el = document.getElementById('status');
       el.innerText = msg;
-      el.className = 'status ' + clase;
+      el.className = 'status ' + clase + (clase === 'exito' || clase === 'error' ? ' overlay-centrado' : '');
     }
 
     // Valida el QR (con fecha o permanente) y registra entrada/salida usando
