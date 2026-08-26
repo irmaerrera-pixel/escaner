@@ -275,6 +275,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       <button onclick="exportarCSV()">Exportar CSV</button>
       <button class="danger" onclick="confirmarLimpiarHistorial()">Borrar Todo</button>
     </div>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <input type="date" id="historial-fecha" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px;">
+      <button onclick="filtrarHistorialPorFecha()">Filtrar</button>
+      <button class="secondary" onclick="renderizarHistorial()">Mostrar todos</button>
+    </div>
     <table>
       <thead>
         <tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
@@ -959,29 +964,47 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     // HISTORIAL
     // ============================================================
+    let registrosCache = [];
+    let historialVistaActual = [];
+
     function renderizarHistorial() {
       const tbody = document.getElementById('tabla-registros');
       tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+      const filtroFecha = document.getElementById('historial-fecha');
+      if (filtroFecha) filtroFecha.value = '';
 
       db.collection('registros').orderBy('creado', 'desc').get()
         .then(function (snap) {
-          const filas = [];
-          snap.forEach(function (doc) {
-            const r = doc.data();
-            let badge;
-            if (!r.autorizado) badge = '<span class="badge no">No autorizado</span>';
-            else if (r.horaSalida) badge = '<span class="badge ok">Completo</span>';
-            else badge = '<span class="badge pendiente">Dentro</span>';
-
-            filas.push('<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
-              '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
-              '<td>' + badge + '</td></tr>');
-          });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Sin registros aún.</td></tr>';
+          registrosCache = [];
+          snap.forEach(function (doc) { registrosCache.push(doc.data()); });
+          dibujarTablaHistorial_(registrosCache);
         })
         .catch(function (error) {
           tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
         });
+    }
+
+    function dibujarTablaHistorial_(lista) {
+      historialVistaActual = lista;
+      const tbody = document.getElementById('tabla-registros');
+      const filas = lista.map(function (r) {
+        let badge;
+        if (!r.autorizado) badge = '<span class="badge no">No autorizado</span>';
+        else if (r.horaSalida) badge = '<span class="badge ok">Completo</span>';
+        else badge = '<span class="badge pendiente">Dentro</span>';
+
+        return '<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
+          '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
+          '<td>' + badge + '</td></tr>';
+      });
+      tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Sin registros aún.</td></tr>';
+    }
+
+    function filtrarHistorialPorFecha() {
+      const fecha = document.getElementById('historial-fecha').value;
+      if (!fecha) { dibujarTablaHistorial_(registrosCache); return; }
+      const filtrados = registrosCache.filter(function (r) { return r.fecha === fecha; });
+      dibujarTablaHistorial_(filtrados);
     }
 
     function confirmarLimpiarHistorial() {
@@ -994,22 +1017,19 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     }
 
     function exportarCSV() {
-      db.collection('registros').orderBy('creado', 'desc').get().then(function (snap) {
-        if (snap.empty) { alert('No hay registros para exportar.'); return; }
-        let csvContent = 'data:text/csv;charset=utf-8,ID,Nombre,Fecha,Hora Entrada,Hora Salida,Autorizado\n';
-        snap.forEach(function (doc) {
-          const r = doc.data();
-          const estado = r.autorizado ? 'SI' : 'NO';
-          csvContent += doc.id + ',"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',' + estado + '\n';
-        });
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', 'registros_' + new Date().toISOString().slice(0, 10) + '.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      if (historialVistaActual.length === 0) { alert('No hay registros para exportar.'); return; }
+      let csvContent = 'data:text/csv;charset=utf-8,Nombre,Fecha,Hora Entrada,Hora Salida,Autorizado\n';
+      historialVistaActual.forEach(function (r) {
+        const estado = r.autorizado ? 'SI' : 'NO';
+        csvContent += '"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',' + estado + '\n';
       });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', 'registros_' + new Date().toISOString().slice(0, 10) + '.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     // ============================================================
