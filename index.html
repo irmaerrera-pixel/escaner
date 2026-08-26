@@ -248,30 +248,6 @@
     #nav-principal button .material-symbols-outlined { font-size: 22px; vertical-align: 0; }
     #nav-principal button small { font-size: 0.68em; font-weight: 600; letter-spacing: 0.1px; }
     #nav-principal button.activo { color: var(--azul); background: var(--azul-tenue); }
-
-    /* Fuerza la pantalla del Escáner en horizontal, sin importar cómo
-       esté acostado físicamente el dispositivo (útil cuando la cámara
-       está fija en un extremo). Solo aplica mientras estás en esa
-       pestaña — el resto de la app se queda en vertical normal. */
-    @media screen and (orientation: portrait) {
-      html.forzar-horizontal {
-        transform: rotate(90deg);
-        transform-origin: top left;
-        width: 100vh;
-        height: 100vw;
-        overflow-x: hidden;
-        position: absolute;
-        top: 100%;
-        left: 0;
-      }
-      html.forzar-horizontal body {
-        width: 100vh;
-        max-width: 100vh;
-      }
-      html.forzar-horizontal #nav-principal {
-        max-width: 100vh;
-      }
-    }
   </style>
   <!-- Tipografía e íconos (paleta Stitch) -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
@@ -667,7 +643,6 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
         if (botones[0]) botones[0].classList.add('activo');
-        document.documentElement.classList.add('forzar-horizontal');
       }
     }
 
@@ -704,8 +679,6 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); volverAlMenuCitas(); }
-
-      document.documentElement.classList.toggle('forzar-horizontal', vistaId === 'vista-escaner');
 
       document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
       const mapaNav = { 'vista-escaner': 0, 'vista-generar': 1, 'vista-citas': 2, 'vista-historial': 3 };
