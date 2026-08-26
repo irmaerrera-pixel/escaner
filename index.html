@@ -22,23 +22,39 @@
 
   <style>
     :root {
-      --azul: #00108E;
-      --azul-oscuro: #000a5c;
-      --oro: #D4A017;
-      --fondo: #EEF1F8;
-      --tinta: #1B1F2A;
-      --tinta-suave: #5B6270;
-      --linea: #DEE2ED;
-      --radio: 14px;
-      --sombra: 0 2px 8px rgba(20, 24, 60, 0.06), 0 1px 2px rgba(20, 24, 60, 0.08);
-      --sombra-hover: 0 6px 16px rgba(20, 24, 60, 0.12);
+      --azul: #000c47;
+      --azul-container: #001b7a;
+      --azul-tenue: rgba(0, 12, 71, 0.06);
+      --ambar-bg: #fed488;
+      --ambar-texto: #775a19;
+      --fondo: #fbf8ff;
+      --superficie: #ffffff;
+      --superficie-tenue: #f5f2fb;
+      --tinta: #1b1b21;
+      --tinta-suave: #454652;
+      --contorno: #757683;
+      --linea: #e2e8f0;
+      --verde: #2e7d32;
+      --verde-bg: #e3f5e6;
+      --rojo: #d32f2f;
+      --rojo-bg: #fce4e4;
+      --radio: 12px;
+      --sombra: 0 1px 3px rgba(27, 27, 33, 0.07), 0 1px 2px rgba(27, 27, 33, 0.06);
+      --sombra-hover: 0 4px 14px rgba(27, 27, 33, 0.12);
     }
 
     * { box-sizing: border-box; }
 
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      font-size: 1.15em;
+      vertical-align: -3px;
+      line-height: 1;
+    }
+
     body {
-      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: linear-gradient(180deg, var(--fondo) 0%, #E4E8F5 100%);
+      font-family: 'Hanken Grotesk', -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--fondo);
       color: var(--tinta);
       max-width: 520px;
       margin: 0 auto;
@@ -56,15 +72,15 @@
     .marca .icono {
       width: 38px; height: 38px;
       border-radius: 10px;
-      background: linear-gradient(135deg, var(--azul), var(--azul-oscuro));
+      background: linear-gradient(135deg, var(--azul), var(--azul-container));
       color: white;
       display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 1em;
       box-shadow: var(--sombra);
       flex-shrink: 0;
     }
+    .marca .icono .material-symbols-outlined { font-size: 22px; vertical-align: 0; }
     .marca .texto { text-align: left; line-height: 1.15; }
-    .marca .texto strong { display: block; font-size: 1.05em; letter-spacing: 0.2px; }
+    .marca .texto strong { display: block; font-size: 1.05em; font-weight: 700; letter-spacing: 0.1px; }
     .marca .texto span { font-size: 0.75em; color: var(--tinta-suave); }
 
     nav {
@@ -79,21 +95,24 @@
       color: white;
       border-radius: 999px;
       cursor: pointer;
+      font-family: inherit;
       font-size: 0.92em;
       font-weight: 600;
       letter-spacing: 0.1px;
       box-shadow: var(--sombra);
-      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, opacity 0.12s ease;
     }
     button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--sombra-hover); }
     button:active:not(:disabled) { transform: translateY(0); }
-    button.secondary { background: #5A6178; }
-    button.danger { background: #C23B3B; }
+    button.secondary { background: var(--superficie); color: var(--tinta); border: 1px solid var(--linea); }
+    button.danger { background: var(--rojo); }
     button.small { padding: 5px 12px; font-size: 0.78em; box-shadow: none; }
+    button.small .material-symbols-outlined { font-size: 1em; vertical-align: -2px; }
     button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
     .card {
-      background: white;
+      background: var(--superficie);
       padding: 22px 20px;
       border-radius: var(--radio);
       border: 1px solid var(--linea);
@@ -104,16 +123,18 @@
     .card::before {
       content: "";
       position: absolute; top: 0; left: 0; right: 0; height: 4px;
-      background: linear-gradient(90deg, var(--azul), var(--oro));
+      background: linear-gradient(90deg, var(--azul), var(--ambar-bg));
     }
 
     h2 {
       font-size: 1.35em;
+      font-weight: 700;
       letter-spacing: 0.1px;
       margin: 4px 0 18px;
       color: var(--azul);
+      display: flex; align-items: center; gap: 8px;
     }
-    h3 { font-size: 1.05em; color: var(--tinta); margin-top: 26px; }
+    h3 { font-size: 1.05em; font-weight: 600; color: var(--tinta); margin-top: 26px; }
 
     #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
 
@@ -122,9 +143,9 @@
       font-weight: 600; border-radius: 10px;
       font-size: 0.92em;
     }
-    .status.normal { background: #EDEFF6; color: var(--tinta-suave); }
-    .status.exito { background: #E3F5EA; color: #14663B; }
-    .status.error { background: #FBEAEA; color: #8A2323; }
+    .status.normal { background: var(--superficie-tenue); color: var(--tinta-suave); }
+    .status.exito { background: var(--verde-bg); color: var(--verde); }
+    .status.error { background: var(--rojo-bg); color: var(--rojo); }
 
     table {
       width: 100%; border-collapse: separate; border-spacing: 0;
@@ -133,37 +154,41 @@
     }
     th, td { padding: 10px 10px; text-align: left; font-size: 0.85em; }
     th {
-      background: var(--azul); color: white;
-      font-weight: 600; letter-spacing: 0.2px;
+      background: var(--azul-tenue); color: var(--tinta-suave);
+      font-weight: 700; letter-spacing: 0.04em;
+      font-size: 0.72em; text-transform: uppercase;
     }
     tbody tr { border-top: 1px solid var(--linea); }
-    tbody tr:nth-child(even) { background: #F7F8FC; }
-    tbody tr:hover { background: #ECEFFA; }
+    tbody tr:nth-child(even) { background: var(--superficie-tenue); }
+    tbody tr:hover { background: var(--azul-tenue); }
 
     .badge {
       padding: 4px 11px; border-radius: 999px;
       font-size: 0.76em; font-weight: 700; letter-spacing: 0.2px;
-      display: inline-block;
+      display: inline-flex; align-items: center; gap: 4px;
     }
-    .badge.ok { background: #E3F5EA; color: #14663B; }
-    .badge.no { background: #FBEAEA; color: #8A2323; }
-    .badge.pendiente { background: #FCF0D6; color: #8A6100; }
-    .badge.activo { background: #E3F5EA; color: #14663B; }
-    .badge.inactivo { background: #EDEFF6; color: var(--tinta-suave); }
+    .badge .material-symbols-outlined { font-size: 1em; vertical-align: -2px; }
+    .badge.ok { background: var(--verde-bg); color: var(--verde); }
+    .badge.no { background: var(--rojo-bg); color: var(--rojo); }
+    .badge.pendiente { background: var(--ambar-bg); color: var(--ambar-texto); }
+    .badge.activo { background: var(--verde-bg); color: var(--verde); }
+    .badge.inactivo { background: var(--superficie-tenue); color: var(--tinta-suave); }
 
     .form-group { margin-bottom: 14px; text-align: left; }
     .form-group label {
-      display: block; font-size: 0.82em; margin-bottom: 5px;
-      font-weight: 600; color: var(--tinta-suave);
+      display: block; font-size: 0.75em; margin-bottom: 5px;
+      font-weight: 700; color: var(--tinta-suave);
+      text-transform: uppercase; letter-spacing: 0.04em;
     }
     .form-group input, .form-group textarea, .form-group select {
       width: 100%; padding: 10px; box-sizing: border-box;
       border: 1px solid var(--linea); border-radius: 8px;
       font-size: 0.95em; font-family: inherit;
-      transition: border-color 0.12s ease;
+      background: var(--superficie-tenue);
+      transition: border-color 0.12s ease, background 0.12s ease;
     }
     .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-      outline: none; border-color: var(--azul);
+      outline: none; border-color: var(--azul); background: var(--superficie);
     }
 
     #gen-resultado { display: none; margin-top: 15px; }
@@ -173,15 +198,20 @@
 
     hr { border: none; border-top: 1px solid var(--linea); }
     code {
-      background: #F1F3F9; padding: 2px 6px; border-radius: 5px;
-      font-size: 0.85em; color: var(--azul-oscuro);
+      background: var(--superficie-tenue); padding: 2px 6px; border-radius: 5px;
+      font-size: 0.85em; color: var(--azul-container);
     }
   </style>
+  <!-- Tipografía e íconos (paleta Stitch) -->
+  <link href="https://fonts.googleapis.com" rel="preconnect">
+  <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 </head>
 <body>
 
   <div class="marca">
-    <div class="icono">CA</div>
+    <div class="icono"><span class="material-symbols-outlined">shield_person</span></div>
     <div class="texto">
       <strong>Control de Acceso</strong>
       <span>CETis No. 42 "Ignacio López Rayón"</span>
@@ -189,10 +219,10 @@
   </div>
 
   <nav>
-    <button onclick="navegarA('vista-escaner')">📷 Escáner</button>
-    <button class="secondary" onclick="navegarA('vista-generar')">🪪 Generar QR</button>
-    <button class="secondary" onclick="navegarA('vista-citas')">📅 Agendar Cita</button>
-    <button class="secondary" onclick="navegarA('vista-historial')">📋 Historial</button>
+    <button onclick="navegarA('vista-escaner')"><span class="material-symbols-outlined">qr_code_scanner</span> Escáner</button>
+    <button class="secondary" onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span> Generar QR</button>
+    <button class="secondary" onclick="navegarA('vista-citas')"><span class="material-symbols-outlined">event</span> Agendar Cita</button>
+    <button class="secondary" onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span> Historial</button>
   </nav>
 
   <!-- Vista Escáner -->
@@ -207,14 +237,14 @@
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
     <nav id="menu-generar" style="margin-bottom:15px;">
-      <button onclick="navegarSubvista('subvista-fecha')">📆 QR por Fecha</button>
-      <button onclick="navegarSubvista('subvista-permanente')">👪 QR Permanente (Padres)</button>
-      <button onclick="navegarSubvista('subvista-lote')">📦 Generar en Lote</button>
+      <button onclick="navegarSubvista('subvista-fecha')"><span class="material-symbols-outlined">calendar_month</span> QR por Fecha</button>
+      <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
+      <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
     <div id="subvista-fecha" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
+      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <div class="form-group">
         <label>Nombre</label>
         <input type="text" id="gen-nombre" placeholder="Ej. Juan Pérez">
@@ -241,7 +271,7 @@
 
     <!-- Subvista: QR Permanente -->
     <div id="subvista-permanente" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
+      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
       <div class="form-group">
         <label>Nombre</label>
@@ -296,7 +326,7 @@
 
     <!-- Subvista: Generar en Lote -->
     <div id="subvista-lote" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()">◀ Volver</button>
+      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <h3>Generar en lote (varios a la vez)</h3>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
@@ -322,13 +352,13 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     <h2>Agendar Cita</h2>
 
     <nav id="menu-citas" style="margin-bottom:15px;">
-      <button onclick="navegarSubvistaCitas('subvista-cita')">🗓️ Agendar Cita</button>
-      <button onclick="navegarSubvistaCitas('subvista-evento')">📢 Evento Masivo</button>
+      <button onclick="navegarSubvistaCitas('subvista-cita')"><span class="material-symbols-outlined">event_available</span> Agendar Cita</button>
+      <button onclick="navegarSubvistaCitas('subvista-evento')"><span class="material-symbols-outlined">campaign</span> Evento Masivo</button>
     </nav>
 
     <!-- Subvista: Agendar Cita -->
     <div id="subvista-cita" class="subvista-citas" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuCitas()">◀ Volver</button>
+      <button class="secondary" onclick="volverAlMenuCitas()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <p style="font-size:0.85em; color:#495057;">
         El código QR del papá/mamá asociado al correo del alumno se activará
         automáticamente 10 minutos antes de la hora de la cita.
@@ -368,7 +398,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
     <!-- Subvista: Evento Masivo -->
     <div id="subvista-evento" class="subvista-citas" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuCitas()">◀ Volver</button>
+      <button class="secondary" onclick="volverAlMenuCitas()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <h3 style="margin-top:15px;">Activación Masiva por Evento</h3>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Para eventos con muchos papás (festivales, juntas generales, etc.).
@@ -916,8 +946,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       const filas = lista.map(function (item) {
         const p = item.datos;
         const badge = p.activo
-          ? '<span class="badge activo">Activado</span>'
-          : '<span class="badge inactivo">Desactivado</span>';
+          ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activado</span>'
+          : '<span class="badge inactivo"><span class="material-symbols-outlined">cancel</span>Desactivado</span>';
         const botonToggle = p.activo
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
@@ -1166,9 +1196,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       const tbody = document.getElementById('tabla-registros');
       const filas = lista.map(function (r) {
         let badge;
-        if (!r.autorizado) badge = '<span class="badge no">No autorizado</span>';
-        else if (r.horaSalida) badge = '<span class="badge ok">Completo</span>';
-        else badge = '<span class="badge pendiente">Dentro</span>';
+        if (!r.autorizado) badge = '<span class="badge no"><span class="material-symbols-outlined">block</span>No autorizado</span>';
+        else if (r.horaSalida) badge = '<span class="badge ok"><span class="material-symbols-outlined">task_alt</span>Completo</span>';
+        else badge = '<span class="badge pendiente"><span class="material-symbols-outlined">directions_walk</span>Dentro</span>';
 
         return '<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
           '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
@@ -1270,8 +1300,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           snap.forEach(function (doc) {
             const c = doc.data();
             const badge = c.activada
-              ? '<span class="badge activo">Activado</span>'
-              : '<span class="badge pendiente">Pendiente</span>';
+              ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activado</span>'
+              : '<span class="badge pendiente"><span class="material-symbols-outlined">schedule</span>Pendiente</span>';
             filas.push('<tr><td>' + c.nombreAlumno + '</td><td>' + c.fecha + '</td><td>' + c.hora + '</td>' +
               '<td>' + c.visita + '</td><td>' + badge + '</td>' +
               '<td><button class="danger small" onclick="eliminarCita(\'' + doc.id + '\')">Eliminar</button></td></tr>');
@@ -1343,9 +1373,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           snap.forEach(function (doc) {
             const e = doc.data();
             let badge;
-            if (e.desactivado) badge = '<span class="badge inactivo">Finalizado</span>';
-            else if (e.activado) badge = '<span class="badge activo">Activo</span>';
-            else badge = '<span class="badge pendiente">Pendiente</span>';
+            if (e.desactivado) badge = '<span class="badge inactivo"><span class="material-symbols-outlined">event_busy</span>Finalizado</span>';
+            else if (e.activado) badge = '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activo</span>';
+            else badge = '<span class="badge pendiente"><span class="material-symbols-outlined">schedule</span>Pendiente</span>';
 
             const filtro = (e.grupo || e.seccion)
               ? [e.grupo, e.seccion].filter(Boolean).join(' / ')
