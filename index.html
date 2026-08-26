@@ -320,86 +320,98 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
   <!-- Vista Agendar Cita -->
   <main id="vista-citas" class="vista card" style="display: none;">
     <h2>Agendar Cita</h2>
-    <p style="font-size:0.85em; color:#495057;">
-      El código QR del papá/mamá asociado al correo del alumno se activará
-      automáticamente 10 minutos antes de la hora de la cita.
-    </p>
-    <div class="form-group">
-      <label>Nombre del alumno</label>
-      <input type="text" id="cita-nombre-alumno" placeholder="Ej. Juan Pérez">
-    </div>
-    <div class="form-group">
-      <label>Correo del alumno</label>
-      <input type="email" id="cita-correo-alumno" placeholder="Ej. alumno@correo.com">
-    </div>
-    <div class="form-group">
-      <label>Fecha</label>
-      <input type="date" id="cita-fecha">
-    </div>
-    <div class="form-group">
-      <label>Hora</label>
-      <input type="time" id="cita-hora">
-    </div>
-    <div class="form-group">
-      <label>Persona a quien visita</label>
-      <input type="text" id="cita-visita" placeholder="Ej. Orientación, Trabajo Social, Prefecto...">
-    </div>
-    <button id="btn-agendar-cita" onclick="agendarCita()">Agendar Cita</button>
 
-    <div id="cita-mensaje" class="status normal"></div>
+    <nav id="menu-citas" style="margin-bottom:15px;">
+      <button onclick="navegarSubvistaCitas('subvista-cita')">🗓️ Agendar Cita</button>
+      <button onclick="navegarSubvistaCitas('subvista-evento')">📢 Evento Masivo</button>
+    </nav>
 
-    <h3 style="margin-top:25px;">Citas agendadas</h3>
-    <table>
-      <thead>
-        <tr><th>Alumno</th><th>Fecha</th><th>Hora</th><th>Visita a</th><th>QR Padre</th><th></th></tr>
-      </thead>
-      <tbody id="tabla-citas"><tr><td colspan="6">Cargando...</td></tr></tbody>
-    </table>
+    <!-- Subvista: Agendar Cita -->
+    <div id="subvista-cita" class="subvista-citas" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuCitas()">◀ Volver</button>
+      <p style="font-size:0.85em; color:#495057;">
+        El código QR del papá/mamá asociado al correo del alumno se activará
+        automáticamente 10 minutos antes de la hora de la cita.
+      </p>
+      <div class="form-group">
+        <label>Nombre del alumno</label>
+        <input type="text" id="cita-nombre-alumno" placeholder="Ej. Juan Pérez">
+      </div>
+      <div class="form-group">
+        <label>Correo del alumno</label>
+        <input type="email" id="cita-correo-alumno" placeholder="Ej. alumno@correo.com">
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="cita-fecha">
+      </div>
+      <div class="form-group">
+        <label>Hora</label>
+        <input type="time" id="cita-hora">
+      </div>
+      <div class="form-group">
+        <label>Persona a quien visita</label>
+        <input type="text" id="cita-visita" placeholder="Ej. Orientación, Trabajo Social, Prefecto...">
+      </div>
+      <button id="btn-agendar-cita" onclick="agendarCita()">Agendar Cita</button>
 
-    <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+      <div id="cita-mensaje" class="status normal"></div>
 
-    <h3 style="margin-top:25px;">Activación Masiva por Evento</h3>
-    <p style="font-size:0.85em; color:#495057; text-align:left;">
-      Para eventos con muchos papás (festivales, juntas generales, etc.).
-      Activa automáticamente todos los QR permanentes de un grupo/sección
-      (o de todos, si los dejas en blanco) a la hora de inicio, y los
-      desactiva a la hora de fin si la indicas.
-    </p>
-    <div class="form-group">
-      <label>Nombre del evento</label>
-      <input type="text" id="evento-nombre" placeholder="Ej. Festival del Día del Niño">
+      <h3 style="margin-top:25px;">Citas agendadas</h3>
+      <table>
+        <thead>
+          <tr><th>Alumno</th><th>Fecha</th><th>Hora</th><th>Visita a</th><th>QR Padre</th><th></th></tr>
+        </thead>
+        <tbody id="tabla-citas"><tr><td colspan="6">Cargando...</td></tr></tbody>
+      </table>
     </div>
-    <div class="form-group">
-      <label>Fecha</label>
-      <input type="date" id="evento-fecha">
-    </div>
-    <div class="form-group">
-      <label>Hora de inicio</label>
-      <input type="time" id="evento-hora-inicio">
-    </div>
-    <div class="form-group">
-      <label>Hora de fin (opcional, desactiva automáticamente)</label>
-      <input type="time" id="evento-hora-fin">
-    </div>
-    <div class="form-group">
-      <label>Grupo (opcional, deja en blanco para todos)</label>
-      <select id="evento-grupo"><option value="">Todos los grupos</option></select>
-    </div>
-    <div class="form-group">
-      <label>Sección (opcional, deja en blanco para todas)</label>
-      <select id="evento-seccion"><option value="">Todas las secciones</option></select>
-    </div>
-    <button id="btn-programar-evento" onclick="programarEvento()">Programar Evento</button>
 
-    <div id="evento-mensaje" class="status normal"></div>
+    <!-- Subvista: Evento Masivo -->
+    <div id="subvista-evento" class="subvista-citas" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuCitas()">◀ Volver</button>
+      <h3 style="margin-top:15px;">Activación Masiva por Evento</h3>
+      <p style="font-size:0.85em; color:#495057; text-align:left;">
+        Para eventos con muchos papás (festivales, juntas generales, etc.).
+        Activa automáticamente todos los QR permanentes de un grupo/sección
+        (o de todos, si los dejas en blanco) a la hora de inicio, y los
+        desactiva a la hora de fin si la indicas.
+      </p>
+      <div class="form-group">
+        <label>Nombre del evento</label>
+        <input type="text" id="evento-nombre" placeholder="Ej. Festival del Día del Niño">
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="evento-fecha">
+      </div>
+      <div class="form-group">
+        <label>Hora de inicio</label>
+        <input type="time" id="evento-hora-inicio">
+      </div>
+      <div class="form-group">
+        <label>Hora de fin (opcional, desactiva automáticamente)</label>
+        <input type="time" id="evento-hora-fin">
+      </div>
+      <div class="form-group">
+        <label>Grupo (opcional, deja en blanco para todos)</label>
+        <select id="evento-grupo"><option value="">Todos los grupos</option></select>
+      </div>
+      <div class="form-group">
+        <label>Sección (opcional, deja en blanco para todas)</label>
+        <select id="evento-seccion"><option value="">Todas las secciones</option></select>
+      </div>
+      <button id="btn-programar-evento" onclick="programarEvento()">Programar Evento</button>
 
-    <h3 style="margin-top:25px;">Eventos programados</h3>
-    <table>
-      <thead>
-        <tr><th>Evento</th><th>Fecha</th><th>Inicio</th><th>Fin</th><th>Grupo/Sección</th><th>Estado</th><th></th></tr>
-      </thead>
-      <tbody id="tabla-eventos"><tr><td colspan="7">Cargando...</td></tr></tbody>
-    </table>
+      <div id="evento-mensaje" class="status normal"></div>
+
+      <h3 style="margin-top:25px;">Eventos programados</h3>
+      <table>
+        <thead>
+          <tr><th>Evento</th><th>Fecha</th><th>Inicio</th><th>Fin</th><th>Grupo/Sección</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody id="tabla-eventos"><tr><td colspan="7">Cargando...</td></tr></tbody>
+      </table>
+    </div>
   </main>
 
   <!-- Vista Historial -->
@@ -475,7 +487,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
-      if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); }
+      if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); volverAlMenuCitas(); }
     }
 
     function navegarSubvista(subvistaId) {
@@ -487,6 +499,17 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function volverAlMenuGenerar() {
       document.querySelectorAll('.subvista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById('menu-generar').style.display = 'flex';
+    }
+
+    function navegarSubvistaCitas(subvistaId) {
+      document.getElementById('menu-citas').style.display = 'none';
+      document.querySelectorAll('.subvista-citas').forEach(function (v) { v.style.display = 'none'; });
+      document.getElementById(subvistaId).style.display = 'block';
+    }
+
+    function volverAlMenuCitas() {
+      document.querySelectorAll('.subvista-citas').forEach(function (v) { v.style.display = 'none'; });
+      document.getElementById('menu-citas').style.display = 'flex';
     }
 
     // ============================================================
