@@ -313,7 +313,14 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // UTILIDADES
     // ============================================================
     function fechaHoy() {
-      return new Date().toISOString().slice(0, 10);
+      // Usamos componentes de fecha LOCALES (no toISOString, que convierte
+      // a UTC y puede adelantar la fecha si estás en horas de la tarde/noche
+      // en México, donde la hora local va atrás de UTC).
+      const d = new Date();
+      const anio = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const dia = String(d.getDate()).padStart(2, '0');
+      return anio + '-' + mes + '-' + dia;
     }
 
     function horaActual() {
@@ -1047,7 +1054,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement('a');
       link.setAttribute('href', encodedUri);
-      link.setAttribute('download', 'registros_' + new Date().toISOString().slice(0, 10) + '.csv');
+      link.setAttribute('download', 'registros_' + fechaHoy() + '.csv');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
