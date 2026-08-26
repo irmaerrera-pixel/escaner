@@ -275,11 +275,16 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       <button onclick="exportarCSV()">Exportar CSV</button>
       <button class="danger" onclick="confirmarLimpiarHistorial()">Borrar Todo</button>
     </div>
-    <div style="display:flex; gap:8px; margin-top:10px;">
-      <input type="date" id="historial-fecha" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px;">
+    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+      <input type="date" id="historial-fecha-desde" style="flex:1; min-width:130px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+      <input type="date" id="historial-fecha-hasta" style="flex:1; min-width:130px; padding:8px; border:1px solid #ccc; border-radius:4px;">
       <button onclick="filtrarHistorialPorFecha()">Filtrar</button>
       <button class="secondary" onclick="renderizarHistorial()">Mostrar todos</button>
     </div>
+    <p style="font-size:0.8em; color:#495057; text-align:left; margin-top:4px;">
+      Para un solo día, pon la misma fecha en "Desde" y "Hasta". Para un periodo, llena ambas con fechas distintas.
+      Si solo llenas "Desde", muestra desde ahí en adelante; si solo llenas "Hasta", muestra hasta esa fecha.
+    </p>
     <table>
       <thead>
         <tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
@@ -970,8 +975,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function renderizarHistorial() {
       const tbody = document.getElementById('tabla-registros');
       tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
-      const filtroFecha = document.getElementById('historial-fecha');
-      if (filtroFecha) filtroFecha.value = '';
+      const desde = document.getElementById('historial-fecha-desde');
+      if (desde) desde.value = '';
+      const hasta = document.getElementById('historial-fecha-hasta');
+      if (hasta) hasta.value = '';
 
       db.collection('registros').orderBy('creado', 'desc').get()
         .then(function (snap) {
@@ -1001,9 +1008,17 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     }
 
     function filtrarHistorialPorFecha() {
-      const fecha = document.getElementById('historial-fecha').value;
-      if (!fecha) { dibujarTablaHistorial_(registrosCache); return; }
-      const filtrados = registrosCache.filter(function (r) { return r.fecha === fecha; });
+      const desde = document.getElementById('historial-fecha-desde').value;
+      const hasta = document.getElementById('historial-fecha-hasta').value;
+
+      if (!desde && !hasta) { dibujarTablaHistorial_(registrosCache); return; }
+
+      const filtrados = registrosCache.filter(function (r) {
+        if (!r.fecha || r.fecha === '-') return false;
+        if (desde && r.fecha < desde) return false;
+        if (hasta && r.fecha > hasta) return false;
+        return true;
+      });
       dibujarTablaHistorial_(filtrados);
     }
 
