@@ -479,11 +479,17 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         const creado = doc.exists ? doc.data().creado : Date.now();
 
         if (modo === 'entrada') {
+          if (doc.exists && doc.data().horaEntrada) {
+            return { tipo: 'ya_usado', mensaje: '⚠️ Este código ya registró su entrada hoy (' + doc.data().horaEntrada + ')' };
+          }
           tx.set(ref, { nombre: nombre, fecha: fecha, horaEntrada: hora, autorizado: true, creado: creado }, { merge: true });
           return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
         }
 
         if (modo === 'salida') {
+          if (doc.exists && doc.data().horaSalida) {
+            return { tipo: 'ya_usado', mensaje: '⚠️ Este código ya registró su salida hoy (' + doc.data().horaSalida + ')' };
+          }
           tx.set(ref, { nombre: nombre, fecha: fecha, horaSalida: hora, autorizado: true, creado: creado }, { merge: true });
           return { tipo: 'salida', mensaje: '🚪 Salida registrada: ' + nombre + ' (' + hora + ')' };
         }
