@@ -21,44 +21,178 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; text-align: center; }
-    nav { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
-    button { padding: 8px 16px; border: none; background: #00108E; color: white; border-radius: 4px; cursor: pointer; }
-    button.secondary { background: #6c757d; }
-    button.danger { background: #dc3545; }
-    button.small { padding: 4px 8px; font-size: 0.8em; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .card { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
-    #reader { width: 100%; margin-top: 10px; }
-    .status { margin-top: 15px; padding: 10px; font-weight: bold; border-radius: 4px; }
-    .status.normal { background: #e9ecef; color: #495057; }
-    .status.exito { background: #d4edda; color: #155724; }
-    .status.error { background: #f8d7da; color: #721c24; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.85em; }
-    th { background-color: #f2f2f2; }
-    .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
-    .badge.ok { background: #d4edda; color: #155724; }
-    .badge.no { background: #f8d7da; color: #721c24; }
-    .badge.pendiente { background: #fff3cd; color: #856404; }
-    .form-group { margin-bottom: 12px; text-align: left; }
-    .form-group label { display: block; font-size: 0.85em; margin-bottom: 4px; font-weight: bold; }
-    .form-group input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    :root {
+      --azul: #00108E;
+      --azul-oscuro: #000a5c;
+      --oro: #D4A017;
+      --fondo: #EEF1F8;
+      --tinta: #1B1F2A;
+      --tinta-suave: #5B6270;
+      --linea: #DEE2ED;
+      --radio: 14px;
+      --sombra: 0 2px 8px rgba(20, 24, 60, 0.06), 0 1px 2px rgba(20, 24, 60, 0.08);
+      --sombra-hover: 0 6px 16px rgba(20, 24, 60, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, var(--fondo) 0%, #E4E8F5 100%);
+      color: var(--tinta);
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 0 12px 40px;
+      min-height: 100vh;
+    }
+
+    .marca {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 4px 14px;
+      margin-bottom: 6px;
+    }
+    .marca .icono {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--azul), var(--azul-oscuro));
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1em;
+      box-shadow: var(--sombra);
+      flex-shrink: 0;
+    }
+    .marca .texto { text-align: left; line-height: 1.15; }
+    .marca .texto strong { display: block; font-size: 1.05em; letter-spacing: 0.2px; }
+    .marca .texto span { font-size: 0.75em; color: var(--tinta-suave); }
+
+    nav {
+      display: flex; gap: 8px; justify-content: center;
+      margin-bottom: 18px; flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 18px;
+      border: none;
+      background: var(--azul);
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.92em;
+      font-weight: 600;
+      letter-spacing: 0.1px;
+      box-shadow: var(--sombra);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--sombra-hover); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button.secondary { background: #5A6178; }
+    button.danger { background: #C23B3B; }
+    button.small { padding: 5px 12px; font-size: 0.78em; box-shadow: none; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .card {
+      background: white;
+      padding: 22px 20px;
+      border-radius: var(--radio);
+      border: 1px solid var(--linea);
+      box-shadow: var(--sombra);
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: "";
+      position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--azul), var(--oro));
+    }
+
+    h2 {
+      font-size: 1.35em;
+      letter-spacing: 0.1px;
+      margin: 4px 0 18px;
+      color: var(--azul);
+    }
+    h3 { font-size: 1.05em; color: var(--tinta); margin-top: 26px; }
+
+    #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
+
+    .status {
+      margin-top: 15px; padding: 12px 14px;
+      font-weight: 600; border-radius: 10px;
+      font-size: 0.92em;
+    }
+    .status.normal { background: #EDEFF6; color: var(--tinta-suave); }
+    .status.exito { background: #E3F5EA; color: #14663B; }
+    .status.error { background: #FBEAEA; color: #8A2323; }
+
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      margin-top: 15px; border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--linea);
+    }
+    th, td { padding: 10px 10px; text-align: left; font-size: 0.85em; }
+    th {
+      background: var(--azul); color: white;
+      font-weight: 600; letter-spacing: 0.2px;
+    }
+    tbody tr { border-top: 1px solid var(--linea); }
+    tbody tr:nth-child(even) { background: #F7F8FC; }
+    tbody tr:hover { background: #ECEFFA; }
+
+    .badge {
+      padding: 4px 11px; border-radius: 999px;
+      font-size: 0.76em; font-weight: 700; letter-spacing: 0.2px;
+      display: inline-block;
+    }
+    .badge.ok { background: #E3F5EA; color: #14663B; }
+    .badge.no { background: #FBEAEA; color: #8A2323; }
+    .badge.pendiente { background: #FCF0D6; color: #8A6100; }
+    .badge.activo { background: #E3F5EA; color: #14663B; }
+    .badge.inactivo { background: #EDEFF6; color: var(--tinta-suave); }
+
+    .form-group { margin-bottom: 14px; text-align: left; }
+    .form-group label {
+      display: block; font-size: 0.82em; margin-bottom: 5px;
+      font-weight: 600; color: var(--tinta-suave);
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; padding: 10px; box-sizing: border-box;
+      border: 1px solid var(--linea); border-radius: 8px;
+      font-size: 0.95em; font-family: inherit;
+      transition: border-color 0.12s ease;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline: none; border-color: var(--azul);
+    }
+
     #gen-resultado { display: none; margin-top: 15px; }
     #gen-qrcode { margin-top: 10px; display: flex; justify-content: center; }
     #genp-resultado { display: none; margin-top: 15px; }
     #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
-    .badge.activo { background: #d4edda; color: #155724; }
-    .badge.inactivo { background: #e9ecef; color: #495057; }
+
+    hr { border: none; border-top: 1px solid var(--linea); }
+    code {
+      background: #F1F3F9; padding: 2px 6px; border-radius: 5px;
+      font-size: 0.85em; color: var(--azul-oscuro);
+    }
   </style>
 </head>
 <body>
 
+  <div class="marca">
+    <div class="icono">CA</div>
+    <div class="texto">
+      <strong>Control de Acceso</strong>
+      <span>CETis No. 42 "Ignacio López Rayón"</span>
+    </div>
+  </div>
+
   <nav>
-    <button onclick="navegarA('vista-escaner')">Escáner</button>
-    <button class="secondary" onclick="navegarA('vista-generar')">Generar QR</button>
-    <button class="secondary" onclick="navegarA('vista-citas')">Agendar Cita</button>
-    <button class="secondary" onclick="navegarA('vista-historial')">Historial</button>
+    <button onclick="navegarA('vista-escaner')">📷 Escáner</button>
+    <button class="secondary" onclick="navegarA('vista-generar')">🪪 Generar QR</button>
+    <button class="secondary" onclick="navegarA('vista-citas')">📅 Agendar Cita</button>
+    <button class="secondary" onclick="navegarA('vista-historial')">📋 Historial</button>
   </nav>
 
   <!-- Vista Escáner -->
@@ -73,9 +207,9 @@
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
     <nav id="menu-generar" style="margin-bottom:15px;">
-      <button onclick="navegarSubvista('subvista-fecha')">QR por Fecha</button>
-      <button onclick="navegarSubvista('subvista-permanente')">QR Permanente (Padres)</button>
-      <button onclick="navegarSubvista('subvista-lote')">Generar en Lote</button>
+      <button onclick="navegarSubvista('subvista-fecha')">📆 QR por Fecha</button>
+      <button onclick="navegarSubvista('subvista-permanente')">👪 QR Permanente (Padres)</button>
+      <button onclick="navegarSubvista('subvista-lote')">📦 Generar en Lote</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
