@@ -139,13 +139,19 @@
     #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
 
     .status {
-      margin-top: 15px; padding: 12px 14px;
-      font-weight: 600; border-radius: 10px;
-      font-size: 0.92em;
+      margin-top: 15px; padding: 16px 14px;
+      font-weight: 700; border-radius: 12px;
+      font-size: 0.98em; text-align: center;
+      letter-spacing: 0.1px;
+      animation: aparecer 0.18s ease;
     }
-    .status.normal { background: var(--superficie-tenue); color: var(--tinta-suave); }
-    .status.exito { background: var(--verde-bg); color: var(--verde); }
-    .status.error { background: var(--rojo-bg); color: var(--rojo); }
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .status.normal { background: var(--superficie-tenue); color: var(--tinta-suave); font-weight: 600; }
+    .status.exito { background: var(--verde-bg); color: var(--verde); border: 1px solid rgba(46,125,50,0.25); }
+    .status.error { background: var(--rojo-bg); color: var(--rojo); border: 1px solid rgba(211,47,47,0.25); }
 
     table {
       width: 100%; border-collapse: separate; border-spacing: 0;
@@ -201,6 +207,33 @@
       background: var(--superficie-tenue); padding: 2px 6px; border-radius: 5px;
       font-size: 0.85em; color: var(--azul-container);
     }
+
+    /* Barra de navegación inferior fija (estilo app móvil) */
+    body { padding-bottom: 84px; }
+    #nav-principal {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      max-width: 520px;
+      margin: 0 auto;
+      background: var(--superficie);
+      border-top: 1px solid var(--linea);
+      box-shadow: 0 -4px 14px rgba(27, 27, 33, 0.08);
+      display: flex; justify-content: space-around; align-items: stretch;
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+      margin-bottom: 0;
+      z-index: 100;
+      gap: 0;
+    }
+    #nav-principal button {
+      background: none; box-shadow: none; color: var(--tinta-suave);
+      flex-direction: column; gap: 2px;
+      padding: 6px 4px; border-radius: 12px;
+      flex: 1; min-width: 0;
+    }
+    #nav-principal button:hover { transform: none; box-shadow: none; background: var(--superficie-tenue); }
+    #nav-principal button .material-symbols-outlined { font-size: 22px; vertical-align: 0; }
+    #nav-principal button small { font-size: 0.68em; font-weight: 600; letter-spacing: 0.1px; }
+    #nav-principal button.activo { color: var(--azul); background: var(--azul-tenue); }
   </style>
   <!-- Tipografía e íconos (paleta Stitch) -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
@@ -218,11 +251,11 @@
     </div>
   </div>
 
-  <nav>
-    <button onclick="navegarA('vista-escaner')"><span class="material-symbols-outlined">qr_code_scanner</span> Escáner</button>
-    <button class="secondary" onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span> Generar QR</button>
-    <button class="secondary" onclick="navegarA('vista-citas')"><span class="material-symbols-outlined">event</span> Agendar Cita</button>
-    <button class="secondary" onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span> Historial</button>
+  <nav id="nav-principal">
+    <button onclick="navegarA('vista-escaner')"><span class="material-symbols-outlined">qr_code_scanner</span><small>Escáner</small></button>
+    <button onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span><small>Generar QR</small></button>
+    <button onclick="navegarA('vista-citas')"><span class="material-symbols-outlined">event</span><small>Citas</small></button>
+    <button onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span><small>Historial</small></button>
   </nav>
 
   <!-- Vista Escáner -->
@@ -518,6 +551,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); volverAlMenuCitas(); }
+
+      document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
+      const mapaNav = { 'vista-escaner': 0, 'vista-generar': 1, 'vista-citas': 2, 'vista-historial': 3 };
+      const botones = document.querySelectorAll('#nav-principal button');
+      if (botones[mapaNav[vistaId]]) botones[mapaNav[vistaId]].classList.add('activo');
     }
 
     function navegarSubvista(subvistaId) {
@@ -1505,6 +1543,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     document.addEventListener('DOMContentLoaded', function () {
       iniciarScanner();
+      const primerBoton = document.querySelector('#nav-principal button');
+      if (primerBoton) primerBoton.classList.add('activo');
       revisarCitasPendientes_();
       revisarEventosPendientes_();
       setInterval(function () {
