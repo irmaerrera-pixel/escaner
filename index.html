@@ -360,9 +360,12 @@
       </div>
 
       <h3 style="margin-top:25px;">Códigos permanentes</h3>
-      <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+      <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; flex-wrap:wrap;">
         <button onclick="activarTodosPermanentes()">Activar visibles</button>
         <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar visibles</button>
+        <button id="btn-enviar-pendientes" class="secondary" onclick="enviarCorreosPendientes()">
+          <span class="material-symbols-outlined">forward_to_inbox</span> Enviar correos pendientes
+        </button>
       </div>
       <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         <input type="email" id="buscar-correo" placeholder="Correo..." style="flex:2; min-width:150px; padding:8px; border:1px solid #ccc; border-radius:4px;">
@@ -540,6 +543,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     };
 
     firebase.initializeApp(firebaseConfig);
+
+    // URL de tu servicio de Apps Script para enviar los QR por correo
+    const APPS_SCRIPT_EMAIL_URL = 'https://script.google.com/macros/s/AKfycbzyEH8298odCWNFyb2cHIeuaeXKZr2cLzHmdW7KALx5MlJ0mHprj1KNAQCadorU0ajP5g/exec';
     const db = firebase.firestore();
     const auth = firebase.auth();
     const proveedorGoogle = new firebase.auth.GoogleAuthProvider();
@@ -590,7 +596,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         pantallaLogin.style.display = 'none';
         appContenido.style.display = 'block';
 
-        document.getElementById('info-usuario').innerText = correo + ' · ' + (rolActual === 'admin' ? 'Administrador' : rolActual === 'citas' ? 'Citas' : 'Checador');
+        document.getElementById('info-usuario').innerText = (rolActual === 'admin' ? 'Administrador' : rolActual === 'citas' ? 'Citas' : 'Checador');
         aplicarPermisosRol_();
 
         if (!appYaIniciada) {
@@ -1099,8 +1105,18 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         const botonToggle = p.activo
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
+
+        const nombreEscapado = (p.nombre || '').replace(/'/g, "\\'");
+        const parentescoEscapado = (p.parentesco || '').replace(/'/g, "\\'");
+        let botonCorreo = '';
+        if (p.correo) {
+          botonCorreo = p.correoEnviado
+            ? '<button class="secondary small" title="Volver a enviar" onclick="enviarCorreoIndividual(\'' + item.id + '\',\'' + nombreEscapado + '\',\'' + p.correo + '\',\'' + parentescoEscapado + '\')"><span class="material-symbols-outlined">mark_email_read</span> Reenviar</button>'
+            : '<button class="small" onclick="enviarCorreoIndividual(\'' + item.id + '\',\'' + nombreEscapado + '\',\'' + p.correo + '\',\'' + parentescoEscapado + '\')"><span class="material-symbols-outlined">mail</span> Enviar</button>';
+        }
+
         return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.grupo || '-') + '</td><td>' + (p.seccion || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
-          '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
+          '<td>' + botonToggle + ' ' + botonCorreo + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
       });
       tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin resultados.</td></tr>';
     }
@@ -1129,6 +1145,91 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function eliminarPermanente(id) {
       if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
       db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
+    }
+
+    // ============================================================
+    // ENVÍO DE QR POR CORREO (Apps Script + Gmail)
+    // ============================================================
+
+    // Regenera la imagen del QR (no la guardamos, la volvemos a dibujar
+    // cada vez que se necesita) y devuelve su dataURL en base64.
+    function generarImagenQR_(id, nombre) {
+      return new Promise(function (resolve, reject) {
+        if (typeof QRCode === 'undefined') { reject(new Error('Librería QR no disponible')); return; }
+        const contenedorTemp = document.createElement('div');
+        contenedorTemp.style.display = 'none';
+        document.body.appendChild(contenedorTemp);
+
+        const contenido = JSON.stringify({ tipo: 'permanente', id: id, nombre: nombre });
+        new QRCode(contenedorTemp, {
+          text: contenido, width: 260, height: 260,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        setTimeout(function () {
+          const canvas = contenedorTemp.querySelector('canvas');
+          const img = contenedorTemp.querySelector('img');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+          document.body.removeChild(contenedorTemp);
+          if (dataUrl) resolve(dataUrl); else reject(new Error('No se pudo generar el QR'));
+        }, 80);
+      });
+    }
+
+    // Genera el QR y lo envía por correo a través del servicio de Apps Script.
+    // Marca correoEnviado:true en Firestore si tiene éxito.
+    async function enviarCorreoQR_(id, nombre, correo, parentesco) {
+      const dataUrl = await generarImagenQR_(id, nombre);
+
+      const respuesta = await fetch(APPS_SCRIPT_EMAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ nombre: nombre, correo: correo, parentesco: parentesco || '', imagenBase64: dataUrl })
+      });
+      const resultado = await respuesta.json();
+      if (!resultado.ok) throw new Error(resultado.error || 'Error desconocido');
+
+      await db.collection('permanentes').doc(id).update({ correoEnviado: true });
+    }
+
+    function enviarCorreoIndividual(id, nombre, correo, parentesco) {
+      enviarCorreoQR_(id, nombre, correo, parentesco)
+        .then(function () { renderizarPermanentes(); })
+        .catch(function (error) { alert('⚠️ Error al enviar el correo: ' + error.message); });
+    }
+
+    // Envía todos los correos pendientes (que tienen correo y aún no se
+    // les ha enviado) DENTRO DE LA VISTA ACTUAL (respeta el filtro de
+    // grupo/sección/correo aplicado, igual que Activar/Desactivar visibles).
+    async function enviarCorreosPendientes() {
+      const pendientes = permanentesVistaActual.filter(function (item) {
+        return item.datos.correo && !item.datos.correoEnviado;
+      });
+
+      if (pendientes.length === 0) {
+        alert('No hay correos pendientes de enviar en la vista actual.');
+        return;
+      }
+      if (!confirm('¿Enviar ' + pendientes.length + ' correo(s) pendiente(s)?')) return;
+
+      const boton = document.getElementById('btn-enviar-pendientes');
+      if (boton) boton.disabled = true;
+
+      let exitosos = 0, fallidos = 0;
+      for (const item of pendientes) {
+        try {
+          await enviarCorreoQR_(item.id, item.datos.nombre, item.datos.correo, item.datos.parentesco);
+          exitosos++;
+        } catch (e) {
+          fallidos++;
+        }
+        await new Promise(function (r) { setTimeout(r, 300); });
+      }
+
+      if (boton) boton.disabled = false;
+      alert('Listo: ' + exitosos + ' enviado(s), ' + fallidos + ' con error.');
+      renderizarPermanentes();
     }
 
     // Activa o desactiva TODOS los códigos que están visibles actualmente
