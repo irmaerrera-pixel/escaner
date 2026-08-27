@@ -293,7 +293,7 @@
 
   <nav id="nav-principal">
     <button onclick="navegarA('vista-escaner')"><span class="material-symbols-outlined">qr_code_scanner</span><small>Escáner</small></button>
-    <button onclick="navegarA('vista-tarjetas')"><span class="material-symbols-outlined">badge</span><small>Tarjetas</small></button>
+    <button onclick="navegarA('vista-tarjetas')"><span class="material-symbols-outlined">badge</span><small>Visitante</small></button>
     <button onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span><small>Generar QR</small></button>
     <button onclick="navegarA('vista-citas')"><span class="material-symbols-outlined">event</span><small>Citas</small></button>
     <button onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span><small>Historial</small></button>
@@ -343,6 +343,7 @@
       <button onclick="navegarSubvista('subvista-fecha')"><span class="material-symbols-outlined">calendar_month</span> QR por Fecha</button>
       <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
+      <button onclick="navegarSubvista('subvista-tarjetas-generar')"><span class="material-symbols-outlined">badge</span> Tarjetas Visitante</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
@@ -460,16 +461,14 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
     </div>
-  </main>
 
-  <!-- Vista Tarjetas Visitante -->
-  <main id="vista-tarjetas" class="vista card" style="display: none;">
-    <h2>Tarjetas de Visitante (reutilizables)</h2>
-    <div id="seccion-generar-tarjetas">
+    <!-- Subvista: Generar Tarjetas Visitante -->
+    <div id="subvista-tarjetas-generar" class="subvista" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
+      <h3>Tarjetas de Visitante (reutilizables)</h3>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
-        30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
-        el día que llega, y se liberan automáticamente en cuanto registra su salida (o
-        a la medianoche, como respaldo).
+        30 tarjetas físicas con un código QR fijo cada una. Se generan una sola vez;
+        después, el checador las asigna/libera desde la pestaña "Visitante".
       </p>
 
       <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
@@ -479,9 +478,16 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
       <div id="tarjetas-mensaje" class="status normal"></div>
       <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
-
-      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
     </div>
+  </main>
+
+  <!-- Vista Visitante (asignar/liberar tarjetas) -->
+  <main id="vista-tarjetas" class="vista card" style="display: none;">
+    <h2>Visitante</h2>
+    <p style="font-size:0.85em; color:#495057; text-align:left;">
+      Asigna una tarjeta libre a la persona que llega. Se libera automáticamente en
+      cuanto registra su salida (o a la medianoche, como respaldo).
+    </p>
 
     <h3 style="margin-top:25px;">Asignar tarjeta a un visitante</h3>
     <div class="form-group">
@@ -724,19 +730,16 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ven la pestaña Citas (agendar + eventos masivos). Los "admin" ven todo.
     function aplicarPermisosRol_() {
       const botones = document.querySelectorAll('#nav-principal button');
-      const seccionGenerarTarjetas = document.getElementById('seccion-generar-tarjetas');
 
       if (rolActual === 'checador') {
-        // Escáner (0) y Tarjetas (1)
+        // Escáner (0) y Tarjetas/Visitante (1)
         botones.forEach(function (b, i) { b.style.display = (i === 0 || i === 1) ? 'flex' : 'none'; });
-        if (seccionGenerarTarjetas) seccionGenerarTarjetas.style.display = 'none';
         navegarA('vista-escaner');
       } else if (rolActual === 'citas') {
         botones.forEach(function (b, i) { b.style.display = (i === 3) ? 'flex' : 'none'; });
         navegarA('vista-citas');
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
-        if (seccionGenerarTarjetas) seccionGenerarTarjetas.style.display = 'block';
         if (botones[0]) botones[0].classList.add('activo');
       }
     }
