@@ -342,6 +342,7 @@
       <button onclick="navegarSubvista('subvista-fecha')"><span class="material-symbols-outlined">calendar_month</span> QR por Fecha</button>
       <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
+      <button onclick="navegarSubvista('subvista-tarjetas')"><span class="material-symbols-outlined">badge</span> Tarjetas Visitante</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
@@ -458,6 +459,50 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
+    </div>
+
+    <!-- Subvista: Tarjetas Visitante -->
+    <div id="subvista-tarjetas" class="subvista" style="display:none;">
+      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
+      <h3>Tarjetas de Visitante (reutilizables)</h3>
+      <p style="font-size:0.85em; color:#495057; text-align:left;">
+        30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
+        el día que llega, y se liberan solas automáticamente a la medianoche para el
+        siguiente día.
+      </p>
+
+      <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
+        <span class="material-symbols-outlined">badge</span> Generar las 30 tarjetas (una sola vez)
+      </button>
+      <button id="btn-descargar-tarjetas" class="secondary" style="display:none;" onclick="descargarTarjetasZip()">Descargar todas (ZIP)</button>
+
+      <div id="tarjetas-mensaje" class="status normal"></div>
+      <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
+
+      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+
+      <h3 style="margin-top:25px;">Asignar tarjeta a un visitante</h3>
+      <div class="form-group">
+        <label>Tarjeta libre</label>
+        <select id="asignar-codigo"><option value="">Selecciona una tarjeta libre...</option></select>
+      </div>
+      <div class="form-group">
+        <label>Nombre del visitante</label>
+        <input type="text" id="asignar-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
+      </div>
+      <div class="form-group">
+        <label>Persona o evento al que asiste</label>
+        <input type="text" id="asignar-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Dirección...">
+      </div>
+      <button onclick="asignarTarjeta()">Asignar tarjeta</button>
+
+      <div id="asignar-mensaje" class="status normal"></div>
+
+      <h3 style="margin-top:25px;">Estado de las tarjetas</h3>
+      <table>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Visita a</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-tarjetas"><tr><td colspan="5">Cargando...</td></tr></tbody>
+      </table>
     </div>
   </main>
 
@@ -658,9 +703,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           iniciarScanner();
           revisarCitasPendientes_();
           revisarEventosPendientes_();
+          revisarTarjetasVencidas_();
           setInterval(function () {
             revisarCitasPendientes_();
             revisarEventosPendientes_();
+            revisarTarjetasVencidas_();
           }, 60000);
         }
       }).catch(function (error) {
@@ -774,7 +821,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       document.querySelectorAll('.vista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
-      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
+      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); renderizarTarjetas(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); volverAlMenuCitas(); }
 
       document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
@@ -986,6 +1033,36 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         }
 
         return registrarEntradaSalida_(datosPermanente.nombre, fechaHoy(), datosPermanente.seccion || null);
+      }
+
+      // --- TARJETA DE VISITANTE (reutilizable) ---
+      if (datos.tipo === 'tarjeta' && datos.codigo) {
+        const docTarjeta = await db.collection('tarjetas').doc(datos.codigo).get();
+
+        if (!docTarjeta.exists) {
+          await registrarNoAutorizado_('Tarjeta no reconocida (' + datos.codigo + ')');
+          return { tipo: 'no_autorizado', mensaje: '⛔ Tarjeta no reconocida' };
+        }
+
+        const datosTarjeta = docTarjeta.data();
+        const hoy = fechaHoy();
+        if (!datosTarjeta.activo || datosTarjeta.fecha !== hoy) {
+          await registrarNoAutorizado_('Tarjeta ' + datos.codigo + ' sin asignar');
+          return { tipo: 'no_autorizado', mensaje: '⛔ La tarjeta ' + datos.codigo + ' no está asignada hoy' };
+        }
+
+        const resultadoTarjeta = await registrarEntradaSalida_(datosTarjeta.nombre, hoy, datosTarjeta.visita || null);
+
+        // En cuanto se registra la SALIDA, la tarjeta se libera de
+        // inmediato (sin esperar a la medianoche) para poder
+        // reasignarla a otro visitante el mismo día.
+        if (resultadoTarjeta.tipo === 'salida') {
+          await db.collection('tarjetas').doc(datos.codigo).update({
+            nombre: null, fecha: null, visita: null, activo: false
+          });
+        }
+
+        return resultadoTarjeta;
       }
 
       // --- QR CON FECHA (alumnos) ---
@@ -1639,6 +1716,212 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         link.download = 'codigos_qr_permanentes.zip';
         link.click();
       });
+    }
+
+    // ============================================================
+    // TARJETAS DE VISITANTE (30 tarjetas físicas reutilizables)
+    // ============================================================
+    const TOTAL_TARJETAS = 30;
+    let tarjetasCache = [];
+    window.tarjetasQRs = []; // para el ZIP: [{codigo, dataUrl}]
+
+    // Crea las 30 tarjetas en Firestore (solo si aún no existen) y
+    // genera sus 30 códigos QR fijos para imprimir y plastificar.
+    async function generarTarjetasIniciales() {
+      const mensajeElem = document.getElementById('tarjetas-mensaje');
+      const boton = document.getElementById('btn-generar-tarjetas');
+      const botonDescargar = document.getElementById('btn-descargar-tarjetas');
+      const contenedor = document.getElementById('tarjetas-qrs');
+
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Verificando tarjetas existentes...';
+      mensajeElem.className = 'status normal';
+      contenedor.innerHTML = '';
+      window.tarjetasQRs = [];
+
+      const yaExisten = await db.collection('tarjetas').limit(1).get();
+      if (!yaExisten.empty) {
+        if (!confirm('Ya existen tarjetas creadas. ¿Quieres volver a generar los 30 códigos QR para imprimir de nuevo (no se borran ni se reasignan las que ya existen)?')) {
+          boton.disabled = false;
+          mensajeElem.innerText = '';
+          return;
+        }
+      } else {
+        mensajeElem.innerText = 'Creando las 30 tarjetas...';
+        const lote = db.batch();
+        for (let i = 1; i <= TOTAL_TARJETAS; i++) {
+          const codigo = 'V' + String(i).padStart(2, '0');
+          const ref = db.collection('tarjetas').doc(codigo);
+          lote.set(ref, { nombre: null, fecha: null, visita: null, activo: false, creado: Date.now() });
+        }
+        await lote.commit();
+      }
+
+      mensajeElem.innerText = 'Generando ' + TOTAL_TARJETAS + ' códigos QR para imprimir...';
+
+      let pendientes = TOTAL_TARJETAS;
+      for (let i = 1; i <= TOTAL_TARJETAS; i++) {
+        const codigo = 'V' + String(i).padStart(2, '0');
+        const contenido = JSON.stringify({ tipo: 'tarjeta', codigo: codigo });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:200px;';
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:1em; font-weight:700; margin-top:4px;';
+        etiqueta.innerText = codigo;
+        tarjeta.appendChild(etiqueta);
+        contenedor.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: codigo === codigo ? contenido : contenido, width: 180, height: 180,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        (function (codigoActual, qrDivActual) {
+          setTimeout(function () {
+            const canvas = qrDivActual.querySelector('canvas');
+            const img = qrDivActual.querySelector('img');
+            const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            window.tarjetasQRs.push({ codigo: codigoActual, dataUrl: dataUrl });
+
+            pendientes--;
+            if (pendientes === 0) {
+              mensajeElem.innerText = '✅ ' + TOTAL_TARJETAS + ' tarjetas listas. Descárgalas e imprímelas.';
+              mensajeElem.className = 'status exito';
+              boton.disabled = false;
+              botonDescargar.style.display = 'inline-block';
+              renderizarTarjetas();
+            }
+          }, 60);
+        })(codigo, qrDiv);
+      }
+    }
+
+    function descargarTarjetasZip() {
+      if (!window.tarjetasQRs || window.tarjetasQRs.length === 0) {
+        alert('Genera las tarjetas primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.tarjetasQRs.forEach(function (t) {
+        if (!t.dataUrl) return;
+        const base64 = t.dataUrl.split(',')[1];
+        zip.file('tarjeta_' + t.codigo + '.png', base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'tarjetas_visitante.zip';
+        link.click();
+      });
+    }
+
+    function renderizarTarjetas() {
+      const tbody = document.getElementById('tabla-tarjetas');
+      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+
+      db.collection('tarjetas').orderBy('creado', 'asc').get()
+        .then(function (snap) {
+          tarjetasCache = [];
+          snap.forEach(function (doc) { tarjetasCache.push({ id: doc.id, datos: doc.data() }); });
+
+          const filas = tarjetasCache.map(function (item) {
+            const t = item.datos;
+            const badge = t.activo
+              ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Asignada</span>'
+              : '<span class="badge inactivo"><span class="material-symbols-outlined">check_circle_outline</span>Libre</span>';
+            const boton = t.activo
+              ? '<button class="danger small" onclick="liberarTarjeta(\'' + item.id + '\')">Liberar</button>'
+              : '';
+            return '<tr><td>' + item.id + '</td><td>' + (t.nombre || '-') + '</td><td>' + (t.visita || '-') + '</td><td>' + badge + '</td><td>' + boton + '</td></tr>';
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Aún no has generado las tarjetas. Presiona "Generar las 30 tarjetas" arriba.</td></tr>';
+
+          poblarSelectTarjetasLibres_();
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function poblarSelectTarjetasLibres_() {
+      const select = document.getElementById('asignar-codigo');
+      const libres = tarjetasCache.filter(function (item) { return !item.datos.activo; });
+      select.innerHTML = '<option value="">Selecciona una tarjeta libre...</option>' +
+        libres.map(function (item) { return '<option value="' + item.id + '">' + item.id + '</option>'; }).join('');
+    }
+
+    function asignarTarjeta() {
+      const codigo = document.getElementById('asignar-codigo').value;
+      const nombre = mayus_(document.getElementById('asignar-nombre').value);
+      const visita = mayus_(document.getElementById('asignar-visita').value);
+      const mensajeElem = document.getElementById('asignar-mensaje');
+
+      if (!codigo || !nombre || !visita) {
+        mensajeElem.innerText = 'Elige una tarjeta, y completa nombre y visita.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      mensajeElem.innerText = 'Asignando...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('tarjetas').doc(codigo).update({
+        nombre: nombre, fecha: fechaHoy(), visita: visita, activo: true
+      }).then(function () {
+        mensajeElem.innerText = '✅ Tarjeta ' + codigo + ' asignada a ' + nombre + '.';
+        mensajeElem.className = 'status exito';
+        document.getElementById('asignar-nombre').value = '';
+        document.getElementById('asignar-visita').value = '';
+        renderizarTarjetas();
+      }).catch(function (error) {
+        mensajeElem.innerText = '⚠️ Error: ' + error.message;
+        mensajeElem.className = 'status error';
+      });
+    }
+
+    function liberarTarjeta(codigo) {
+      if (!confirm('¿Liberar la tarjeta ' + codigo + '?')) return;
+      db.collection('tarjetas').doc(codigo).update({
+        nombre: null, fecha: null, visita: null, activo: false
+      }).then(renderizarTarjetas);
+    }
+
+    // Revisa cada minuto si alguna tarjeta quedó asignada de un día
+    // anterior (fecha distinta a hoy) y la libera automáticamente.
+    // Corre mientras la app esté abierta, en cualquier pestaña.
+    async function revisarTarjetasVencidas_() {
+      try {
+        const hoy = fechaHoy();
+        const snap = await db.collection('tarjetas').where('activo', '==', true).get();
+        if (snap.empty) return;
+
+        const lote = db.batch();
+        let huboCambios = false;
+        snap.forEach(function (doc) {
+          const t = doc.data();
+          if (t.fecha !== hoy) {
+            lote.update(doc.ref, { nombre: null, fecha: null, visita: null, activo: false });
+            huboCambios = true;
+          }
+        });
+        if (huboCambios) await lote.commit();
+
+        if (huboCambios && document.getElementById('vista-generar').style.display !== 'none') {
+          renderizarTarjetas();
+        }
+      } catch (e) {
+        console.error('Error revisando tarjetas vencidas:', e);
+      }
     }
 
     // ============================================================
