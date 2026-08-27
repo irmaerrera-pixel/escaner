@@ -465,21 +465,23 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
   <!-- Vista Tarjetas Visitante -->
   <main id="vista-tarjetas" class="vista card" style="display: none;">
     <h2>Tarjetas de Visitante (reutilizables)</h2>
-    <p style="font-size:0.85em; color:#495057; text-align:left;">
-      30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
-      el día que llega, y se liberan automáticamente en cuanto registra su salida (o
-      a la medianoche, como respaldo).
-    </p>
+    <div id="seccion-generar-tarjetas">
+      <p style="font-size:0.85em; color:#495057; text-align:left;">
+        30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
+        el día que llega, y se liberan automáticamente en cuanto registra su salida (o
+        a la medianoche, como respaldo).
+      </p>
 
-    <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
-      <span class="material-symbols-outlined">badge</span> Generar las 30 tarjetas (una sola vez)
-    </button>
-    <button id="btn-descargar-tarjetas" class="secondary" style="display:none;" onclick="descargarTarjetasZip()">Descargar todas (ZIP)</button>
+      <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
+        <span class="material-symbols-outlined">badge</span> Generar las 30 tarjetas (una sola vez)
+      </button>
+      <button id="btn-descargar-tarjetas" class="secondary" style="display:none;" onclick="descargarTarjetasZip()">Descargar todas (ZIP)</button>
 
-    <div id="tarjetas-mensaje" class="status normal"></div>
-    <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
+      <div id="tarjetas-mensaje" class="status normal"></div>
+      <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
 
-    <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+    </div>
 
     <h3 style="margin-top:25px;">Asignar tarjeta a un visitante</h3>
     <div class="form-group">
@@ -722,15 +724,19 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ven la pestaña Citas (agendar + eventos masivos). Los "admin" ven todo.
     function aplicarPermisosRol_() {
       const botones = document.querySelectorAll('#nav-principal button');
+      const seccionGenerarTarjetas = document.getElementById('seccion-generar-tarjetas');
+
       if (rolActual === 'checador') {
         // Escáner (0) y Tarjetas (1)
         botones.forEach(function (b, i) { b.style.display = (i === 0 || i === 1) ? 'flex' : 'none'; });
+        if (seccionGenerarTarjetas) seccionGenerarTarjetas.style.display = 'none';
         navegarA('vista-escaner');
       } else if (rolActual === 'citas') {
         botones.forEach(function (b, i) { b.style.display = (i === 3) ? 'flex' : 'none'; });
         navegarA('vista-citas');
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
+        if (seccionGenerarTarjetas) seccionGenerarTarjetas.style.display = 'block';
         if (botones[0]) botones[0].classList.add('activo');
       }
     }
