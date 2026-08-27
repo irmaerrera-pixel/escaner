@@ -721,6 +721,31 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       }
     });
 
+    // Envía el registro de entrada/salida al mismo servicio de Apps Script
+    // (con "tipo: registro") para que quede reflejado en tiempo real en
+    // tu Google Sheet de asistencia. Es un "fire and forget": si falla
+    // por lo que sea, no interrumpe el flujo normal de la app.
+    function sincronizarConHoja_(registro) {
+      const estado = !registro.autorizado
+        ? 'No autorizado'
+        : (registro.horaSalida ? 'Completo' : 'Dentro');
+
+      fetch(APPS_SCRIPT_EMAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          tipo: 'registro',
+          idRegistro: idRegistro(registro.nombre, registro.fecha),
+          nombre: registro.nombre,
+          fecha: registro.fecha,
+          horaEntrada: registro.horaEntrada || '',
+          horaSalida: registro.horaSalida || '',
+          detalle: registro.detalle || '',
+          estado: estado
+        })
+      }).catch(function () { /* si falla, no interrumpe la app */ });
+    }
+
     function fechaHoy() {
       // Usamos componentes de fecha LOCALES (no toISOString, que convierte
       // a UTC y puede adelantar la fecha si estás en horas de la tarde/noche
@@ -1047,6 +1072,15 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         }
 
         return { tipo: 'completo', mensaje: '⚠️ ' + nombre + ' ya completó su entrada y salida hoy' };
+      }).then(function (resultado) {
+        // Sincroniza con la hoja de Google en tiempo real (no bloquea
+        // ni afecta la app si la sincronización llegara a fallar).
+        if (resultado.tipo === 'entrada' || resultado.tipo === 'salida') {
+          ref.get().then(function (docActual) {
+            if (docActual.exists) sincronizarConHoja_(docActual.data());
+          }).catch(function () {});
+        }
+        return resultado;
       });
     }
 
