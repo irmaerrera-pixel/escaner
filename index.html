@@ -300,6 +300,12 @@
     <div id="modo-escaner" style="font-size:0.85em; color:#495057; margin-bottom:5px;"></div>
     <div id="reader"></div>
     <div id="status" class="status normal">Esperando escaneo...</div>
+
+    <!-- Campo para el lector físico (tipo pistola, actúa como teclado).
+         Queda invisible pero enfocado todo el tiempo, listo para recibir
+         lo que el lector "escriba" y procesarlo automáticamente. -->
+    <input type="text" id="entrada-lector-fisico" autocomplete="off"
+      style="position:absolute; opacity:0; height:1px; width:1px; pointer-events:none;">
   </main>
 
   <!-- Vista Generar QR -->
@@ -730,6 +736,47 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         qrbox: { width: 250, height: 250 }
       }, false);
       scanner.render(onScanSuccess);
+
+      iniciarLectorFisico_();
+    }
+
+    // ============================================================
+    // LECTOR FÍSICO (pistola QR/código de barras tipo teclado)
+    // ============================================================
+    // Estos lectores "escriben" el contenido del código como si fuera
+    // un teclado, y al terminar mandan un Enter. Este campo invisible
+    // se mantiene enfocado todo el tiempo para capturar esa escritura,
+    // y en cuanto llega el Enter, procesa el código exactamente igual
+    // que si lo hubiera leído la cámara.
+    function iniciarLectorFisico_() {
+      const campo = document.getElementById('entrada-lector-fisico');
+      if (!campo) return;
+
+      function reenfocar() {
+        // No le quites el foco a un <input> o <textarea> donde la
+        // persona esté escribiendo algo a mano en otra parte de la app.
+        const activo = document.activeElement;
+        const escribiendoEnOtroLado = activo && activo !== campo &&
+          (activo.tagName === 'INPUT' || activo.tagName === 'TEXTAREA' || activo.tagName === 'SELECT');
+        if (!escribiendoEnOtroLado && document.getElementById('vista-escaner').style.display !== 'none') {
+          campo.focus();
+        }
+      }
+
+      campo.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Enter') {
+          evento.preventDefault();
+          const valor = campo.value.trim();
+          campo.value = '';
+          if (valor) onScanSuccess(valor);
+        }
+      });
+
+      // Mantiene el campo enfocado: al cargar, y cada vez que el
+      // usuario haga clic en cualquier parte de la pantalla de Escáner.
+      reenfocar();
+      document.getElementById('vista-escaner').addEventListener('click', reenfocar);
+      setInterval(reenfocar, 1000);
     }
 
     function onScanSuccess(datosQR) {
