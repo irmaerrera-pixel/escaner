@@ -298,7 +298,30 @@
   <main id="vista-escaner" class="vista card">
     <h2>Escanear Código QR</h2>
     <div id="modo-escaner" style="font-size:0.85em; color:#495057; margin-bottom:5px;"></div>
-    <div id="reader"></div>
+
+    <!-- Selector: elige cómo vas a escanear -->
+    <div id="selector-metodo-escaneo" style="display:flex; gap:10px; justify-content:center; margin:15px 0;">
+      <button onclick="elegirMetodoEscaneo_('camara')">
+        <span class="material-symbols-outlined">photo_camera</span> Usar Cámara
+      </button>
+      <button class="secondary" onclick="elegirMetodoEscaneo_('lector')">
+        <span class="material-symbols-outlined">barcode_scanner</span> Usar Lector Físico
+      </button>
+    </div>
+
+    <button id="btn-cambiar-metodo" class="secondary small" onclick="mostrarSelectorMetodo_()" style="display:none; margin-bottom:10px;">
+      <span class="material-symbols-outlined">swap_horiz</span> Cambiar método
+    </button>
+
+    <div id="zona-camara" style="display:none;">
+      <div id="reader"></div>
+    </div>
+
+    <div id="zona-lector" style="display:none; text-align:center; padding:30px 10px;">
+      <span class="material-symbols-outlined" style="font-size:48px; color:var(--tinta-suave);">barcode_scanner</span>
+      <p style="color:var(--tinta-suave); margin-top:10px;">Listo para escanear con tu lector físico...</p>
+    </div>
+
     <div id="status" class="status normal">Esperando escaneo...</div>
 
     <!-- Campo para el lector físico (tipo pistola, actúa como teclado).
@@ -719,6 +742,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     let disponible = true;
 
+    let metodoEscaneoElegido = null;
+    let scannerCamaraIniciado = null;
+    let lectorFisicoConfigurado = false;
+
     function iniciarScanner() {
       const modo = modoForzado_();
       const modoElem = document.getElementById('modo-escaner');
@@ -730,14 +757,44 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         modoElem.innerText = 'Modo automático (entrada/salida)';
       }
 
-      // Usamos el escáner con menú de selección de cámara (versión estable).
-      const scanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: { width: 250, height: 250 }
-      }, false);
-      scanner.render(onScanSuccess);
+      configurarLectorFisico_();
+      // No arrancamos cámara ni lector todavía: se espera a que el
+      // usuario elija uno de los dos métodos con los botones.
+    }
 
-      iniciarLectorFisico_();
+    // Elige entre cámara o lector físico. Solo activa lo que corresponde,
+    // para no gastar la cámara si vas a usar el lector, y viceversa.
+    function elegirMetodoEscaneo_(metodo) {
+      metodoEscaneoElegido = metodo;
+      document.getElementById('selector-metodo-escaneo').style.display = 'none';
+      document.getElementById('btn-cambiar-metodo').style.display = 'inline-flex';
+
+      if (metodo === 'camara') {
+        document.getElementById('zona-camara').style.display = 'block';
+        document.getElementById('zona-lector').style.display = 'none';
+
+        if (!scannerCamaraIniciado) {
+          scannerCamaraIniciado = new Html5QrcodeScanner("reader", {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          }, false);
+          scannerCamaraIniciado.render(onScanSuccess);
+        }
+      } else {
+        document.getElementById('zona-camara').style.display = 'none';
+        document.getElementById('zona-lector').style.display = 'block';
+        enfocarLectorFisico_();
+      }
+    }
+
+    // Regresa a la pantalla de "elige tu método" (por si te equivocaste
+    // o quieres cambiar de cámara a lector o viceversa).
+    function mostrarSelectorMetodo_() {
+      metodoEscaneoElegido = null;
+      document.getElementById('selector-metodo-escaneo').style.display = 'flex';
+      document.getElementById('btn-cambiar-metodo').style.display = 'none';
+      document.getElementById('zona-camara').style.display = 'none';
+      document.getElementById('zona-lector').style.display = 'none';
     }
 
     // ============================================================
@@ -748,20 +805,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // se mantiene enfocado todo el tiempo para capturar esa escritura,
     // y en cuanto llega el Enter, procesa el código exactamente igual
     // que si lo hubiera leído la cámara.
-    function iniciarLectorFisico_() {
+    function configurarLectorFisico_() {
+      if (lectorFisicoConfigurado) return;
+      lectorFisicoConfigurado = true;
+
       const campo = document.getElementById('entrada-lector-fisico');
       if (!campo) return;
-
-      function reenfocar() {
-        // No le quites el foco a un <input> o <textarea> donde la
-        // persona esté escribiendo algo a mano en otra parte de la app.
-        const activo = document.activeElement;
-        const escribiendoEnOtroLado = activo && activo !== campo &&
-          (activo.tagName === 'INPUT' || activo.tagName === 'TEXTAREA' || activo.tagName === 'SELECT');
-        if (!escribiendoEnOtroLado && document.getElementById('vista-escaner').style.display !== 'none') {
-          campo.focus();
-        }
-      }
 
       campo.addEventListener('keydown', function (evento) {
         if (evento.key === 'Enter') {
@@ -772,11 +821,24 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         }
       });
 
-      // Mantiene el campo enfocado: al cargar, y cada vez que el
-      // usuario haga clic en cualquier parte de la pantalla de Escáner.
-      reenfocar();
-      document.getElementById('vista-escaner').addEventListener('click', reenfocar);
-      setInterval(reenfocar, 1000);
+      document.getElementById('vista-escaner').addEventListener('click', enfocarLectorFisico_);
+      setInterval(enfocarLectorFisico_, 1000);
+    }
+
+    function enfocarLectorFisico_() {
+      if (metodoEscaneoElegido !== 'lector') return;
+
+      const campo = document.getElementById('entrada-lector-fisico');
+      if (!campo) return;
+
+      // No le quites el foco a un <input> o <textarea> donde la
+      // persona esté escribiendo algo a mano en otra parte de la app.
+      const activo = document.activeElement;
+      const escribiendoEnOtroLado = activo && activo !== campo &&
+        (activo.tagName === 'INPUT' || activo.tagName === 'TEXTAREA' || activo.tagName === 'SELECT');
+      if (!escribiendoEnOtroLado && document.getElementById('vista-escaner').style.display !== 'none') {
+        campo.focus();
+      }
     }
 
     function onScanSuccess(datosQR) {
