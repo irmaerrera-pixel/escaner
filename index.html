@@ -1165,8 +1165,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function renderizarPermitidos() {
       const tbody = document.getElementById('tabla-permitidos');
       tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+      const hoy = fechaHoy();
 
-      db.collection('permitidos').orderBy('creado', 'desc').get()
+      db.collection('permitidos').where('fecha', '==', hoy).orderBy('creado', 'desc').get()
         .then(function (snap) {
           const filas = [];
           snap.forEach(function (doc) {
@@ -1174,7 +1175,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
             filas.push('<tr><td>' + p.nombre + '</td><td>' + p.fecha + '</td><td>' + (p.visita || '-') + '</td>' +
               '<td><button class="danger small" onclick="eliminarPermitido(\'' + doc.id + '\')">Eliminar</button></td></tr>');
           });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">Aún no has generado códigos.</td></tr>';
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">No hay códigos generados para hoy (' + hoy + ').</td></tr>';
         })
         .catch(function (error) {
           tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
