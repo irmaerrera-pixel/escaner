@@ -746,9 +746,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           actualizarEstado('⚠️ Error: ' + err.message, 'error');
         })
         .finally(function () {
+          // El mensaje se queda fijo en pantalla (no se borra solo);
+          // solo permitimos que se pueda volver a escanear después
+          // de una breve pausa, para evitar registrar el mismo QR
+          // dos veces por accidente.
           setTimeout(function () {
             disponible = true;
-            actualizarEstado('Esperando escaneo...', 'normal');
           }, 3000);
         });
     }
