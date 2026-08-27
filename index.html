@@ -219,6 +219,8 @@
     #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
 
     hr { border: none; border-top: 1px solid var(--linea); }
+    .mayusculas-auto { text-transform: uppercase; }
+    .mayusculas-auto::placeholder { text-transform: none; }
     code {
       background: var(--superficie-tenue); padding: 2px 6px; border-radius: 5px;
       font-size: 0.85em; color: var(--azul-container);
@@ -347,7 +349,7 @@
       <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
       <div class="form-group">
         <label>Nombre</label>
-        <input type="text" id="gen-nombre" placeholder="Ej. Juan Pérez">
+        <input type="text" id="gen-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
       </div>
       <div class="form-group">
         <label>Fecha permitida de ingreso</label>
@@ -355,11 +357,11 @@
       </div>
       <div class="form-group">
         <label>Persona o evento al que asiste</label>
-        <input type="text" id="gen-visita" placeholder="Ej. Orientación, Dirección, Junta de padres...">
+        <input type="text" id="gen-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Dirección, Junta de padres...">
       </div>
       <div class="form-group">
         <label>Correo electrónico</label>
-        <input type="email" id="gen-correo" placeholder="Ej. correo@ejemplo.com">
+        <input type="email" id="gen-correo" class="mayusculas-auto" placeholder="Ej. correo@ejemplo.com">
       </div>
       <button id="btn-generar" onclick="generarQR()">Generar QR</button>
       <button class="secondary" onclick="limpiarFormulario()">Nuevo</button>
@@ -383,23 +385,23 @@
       <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
       <div class="form-group">
         <label>Nombre</label>
-        <input type="text" id="genp-nombre" placeholder="Ej. María López">
+        <input type="text" id="genp-nombre" class="mayusculas-auto" placeholder="Ej. María López">
       </div>
       <div class="form-group">
         <label>Parentesco (opcional)</label>
-        <input type="text" id="genp-parentesco" placeholder="Ej. Mamá, Papá, Tutor">
+        <input type="text" id="genp-parentesco" class="mayusculas-auto" placeholder="Ej. Mamá, Papá, Tutor">
       </div>
       <div class="form-group">
         <label>Grupo (opcional)</label>
-        <input type="text" id="genp-grupo" placeholder="Ej. 3">
+        <input type="text" id="genp-grupo" class="mayusculas-auto" placeholder="Ej. 3">
       </div>
       <div class="form-group">
         <label>Sección (opcional)</label>
-        <input type="text" id="genp-seccion" placeholder="Ej. A">
+        <input type="text" id="genp-seccion" class="mayusculas-auto" placeholder="Ej. A">
       </div>
       <div class="form-group">
         <label>Correo (opcional, para el envío automático más adelante)</label>
-        <input type="email" id="genp-correo" placeholder="Ej. maria@correo.com">
+        <input type="email" id="genp-correo" class="mayusculas-auto" placeholder="Ej. maria@correo.com">
       </div>
       <button id="btn-generar-permanente" onclick="generarQRPermanente()">Generar QR Permanente</button>
       <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
@@ -446,7 +448,7 @@
         Se genera un QR para la mamá y otro para el papá por cada fila. Si falta un nombre, se omite ese QR.
       </p>
       <div class="form-group">
-        <textarea id="lote-texto" rows="6" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
+        <textarea id="lote-texto" rows="6" class="mayusculas-auto" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
           placeholder="alumno1@correo.com	3	A	María López	Juan Pérez
 alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </div>
@@ -476,11 +478,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </p>
       <div class="form-group">
         <label>Nombre del alumno</label>
-        <input type="text" id="cita-nombre-alumno" placeholder="Ej. Juan Pérez">
+        <input type="text" id="cita-nombre-alumno" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
       </div>
       <div class="form-group">
         <label>Correo del alumno</label>
-        <input type="email" id="cita-correo-alumno" placeholder="Ej. alumno@correo.com">
+        <input type="email" id="cita-correo-alumno" class="mayusculas-auto" placeholder="Ej. alumno@correo.com">
       </div>
       <div class="form-group">
         <label>Fecha</label>
@@ -492,7 +494,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </div>
       <div class="form-group">
         <label>Persona a quien visita</label>
-        <input type="text" id="cita-visita" placeholder="Ej. Orientación, Trabajo Social, Prefecto...">
+        <input type="text" id="cita-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Trabajo Social, Prefecto...">
       </div>
       <button id="btn-agendar-cita" onclick="agendarCita()">Agendar Cita</button>
 
@@ -519,7 +521,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </p>
       <div class="form-group">
         <label>Nombre del evento</label>
-        <input type="text" id="evento-nombre" placeholder="Ej. Festival del Día del Niño">
+        <input type="text" id="evento-nombre" class="mayusculas-auto" placeholder="Ej. Festival del Día del Niño">
       </div>
       <div class="form-group">
         <label>Fecha</label>
@@ -535,11 +537,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </div>
       <div class="form-group">
         <label>Grupo (opcional, deja en blanco para todos)</label>
-        <select id="evento-grupo"><option value="">Todos los grupos</option></select>
+        <select id="evento-grupo" class="mayusculas-auto"><option value="">Todos los grupos</option></select>
       </div>
       <div class="form-group">
         <label>Sección (opcional, deja en blanco para todas)</label>
-        <select id="evento-seccion"><option value="">Todas las secciones</option></select>
+        <select id="evento-seccion" class="mayusculas-auto"><option value="">Todas las secciones</option></select>
       </div>
       <button id="btn-programar-evento" onclick="programarEvento()">Programar Evento</button>
 
@@ -700,6 +702,23 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function mayus_(texto) {
       return (texto || '').toString().trim().toUpperCase();
     }
+
+    // Convierte a mayúsculas el VALOR REAL (no solo la apariencia) de
+    // cualquier campo marcado con la clase "mayusculas-auto", mientras
+    // se escribe o se pega texto (Ctrl+V), conservando la posición del
+    // cursor para que no se sienta raro al escribir.
+    document.addEventListener('input', function (evento) {
+      const campo = evento.target;
+      if (!campo.classList || !campo.classList.contains('mayusculas-auto')) return;
+      if (campo.tagName === 'SELECT') return; // los <select> no necesitan esto
+
+      const inicio = campo.selectionStart;
+      const fin = campo.selectionEnd;
+      campo.value = campo.value.toUpperCase();
+      if (inicio !== null && fin !== null) {
+        campo.setSelectionRange(inicio, fin);
+      }
+    });
 
     function fechaHoy() {
       // Usamos componentes de fecha LOCALES (no toISOString, que convierte
