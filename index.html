@@ -406,6 +406,12 @@
         <label>Correo (opcional, para el envío automático más adelante)</label>
         <input type="email" id="genp-correo" class="mayusculas-auto" placeholder="Ej. maria@correo.com">
       </div>
+      <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="genp-entre-semana" style="width:auto;">
+        <label for="genp-entre-semana" style="margin-bottom:0; text-transform:none; letter-spacing:normal; font-weight:600;">
+          Solo Lunes a Viernes (para personal que sale de las instalaciones)
+        </label>
+      </div>
       <button id="btn-generar-permanente" onclick="generarQRPermanente()">Generar QR Permanente</button>
       <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
 
@@ -813,6 +819,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       return anio + '-' + mes + '-' + dia;
     }
 
+    // true de lunes a viernes, false sábado/domingo (getDay(): 0=domingo, 6=sábado)
+    function esDiaEntreSemana_() {
+      const diaSemana = new Date().getDay();
+      return diaSemana >= 1 && diaSemana <= 5;
+    }
+
     function horaActual() {
       return new Date().toLocaleTimeString();
     }
@@ -1040,6 +1052,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         if (!datosPermanente.activo) {
           await registrarNoAutorizado_(datosPermanente.nombre);
           return { tipo: 'no_autorizado', mensaje: '⛔ Acceso desactivado: ' + datosPermanente.nombre };
+        }
+
+        if (datosPermanente.soloEntreSemana && !esDiaEntreSemana_()) {
+          await registrarNoAutorizado_(datosPermanente.nombre);
+          return { tipo: 'no_autorizado', mensaje: '⛔ ' + datosPermanente.nombre + ': este código solo es válido de Lunes a Viernes' };
         }
 
         return registrarEntradaSalida_(datosPermanente.nombre, fechaHoy(), datosPermanente.seccion || null);
@@ -1284,6 +1301,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       const grupo = mayus_(document.getElementById('genp-grupo').value);
       const seccion = mayus_(document.getElementById('genp-seccion').value);
       const correo = mayus_(document.getElementById('genp-correo').value);
+      const soloEntreSemana = document.getElementById('genp-entre-semana').checked;
       const mensajeElem = document.getElementById('genp-mensaje');
       const boton = document.getElementById('btn-generar-permanente');
 
@@ -1302,7 +1320,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       mensajeElem.innerText = 'Guardando...';
       mensajeElem.className = 'status normal';
 
-      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, grupo: grupo || null, seccion: seccion || null, correo: correo || null, activo: true, creado: Date.now() })
+      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, grupo: grupo || null, seccion: seccion || null, correo: correo || null, soloEntreSemana: soloEntreSemana, activo: true, creado: Date.now() })
         .then(function (docRef) {
           const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
           const contenedor = document.getElementById('genp-qrcode');
@@ -1350,6 +1368,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       document.getElementById('genp-grupo').value = '';
       document.getElementById('genp-seccion').value = '';
       document.getElementById('genp-correo').value = '';
+      document.getElementById('genp-entre-semana').checked = false;
       document.getElementById('genp-qrcode').innerHTML = '';
       document.getElementById('genp-resultado').style.display = 'none';
       document.getElementById('genp-mensaje').innerText = '';
@@ -1415,6 +1434,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         const badge = p.activo
           ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activado</span>'
           : '<span class="badge inactivo"><span class="material-symbols-outlined">cancel</span>Desactivado</span>';
+        const badgeDias = p.soloEntreSemana
+          ? ' <span class="badge pendiente" title="Solo válido de Lunes a Viernes"><span class="material-symbols-outlined">event_repeat</span>L-V</span>'
+          : '';
         const botonToggle = p.activo
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
@@ -1428,7 +1450,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
             : '<button class="small" onclick="enviarCorreoIndividual(\'' + item.id + '\',\'' + nombreEscapado + '\',\'' + p.correo + '\',\'' + parentescoEscapado + '\')"><span class="material-symbols-outlined">mail</span> Enviar</button>';
         }
 
-        return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.grupo || '-') + '</td><td>' + (p.seccion || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + '</td>' +
+        return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.grupo || '-') + '</td><td>' + (p.seccion || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + badgeDias + '</td>' +
           '<td>' + botonToggle + ' ' + botonCorreo + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
       });
       tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin resultados.</td></tr>';
