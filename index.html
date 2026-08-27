@@ -173,6 +173,8 @@
       border: 1px solid var(--linea);
     }
     th, td { padding: 10px 10px; text-align: left; font-size: 0.85em; }
+    td { text-transform: uppercase; }
+    td button { text-transform: none; }
     th {
       background: var(--azul-tenue); color: var(--tinta-suave);
       font-weight: 700; letter-spacing: 0.04em;
@@ -572,9 +574,9 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     </p>
     <table>
       <thead>
-        <tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
+        <tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Sección/Visita a</th><th>Estado</th></tr>
       </thead>
-      <tbody id="tabla-registros"><tr><td colspan="5">Cargando...</td></tr></tbody>
+      <tbody id="tabla-registros"><tr><td colspan="6">Cargando...</td></tr></tbody>
     </table>
   </main>
 
@@ -686,6 +688,19 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // ============================================================
     // UTILIDADES
     // ============================================================
+    // La librería QRCode.js no maneja bien acentos ni la ñ por defecto
+    // (asume otra codificación). Esta conversión evita el error al
+    // generar el QR, sin afectar cómo se lee después al escanear.
+    function utf8ParaQR_(texto) {
+      return unescape(encodeURIComponent(texto));
+    }
+
+    // Estandariza cualquier texto capturado (nombres, correos, grupo,
+    // sección, etc.) a MAYÚSCULAS, quitando espacios extra al inicio/final.
+    function mayus_(texto) {
+      return (texto || '').toString().trim().toUpperCase();
+    }
+
     function fechaHoy() {
       // Usamos componentes de fecha LOCALES (no toISOString, que convierte
       // a UTC y puede adelantar la fecha si estás en horas de la tarde/noche
@@ -906,7 +921,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           return { tipo: 'no_autorizado', mensaje: '⛔ Acceso desactivado: ' + datosPermanente.nombre };
         }
 
-        return registrarEntradaSalida_(datosPermanente.nombre, fechaHoy());
+        return registrarEntradaSalida_(datosPermanente.nombre, fechaHoy(), datosPermanente.seccion || null);
       }
 
       // --- QR CON FECHA (alumnos) ---
@@ -931,7 +946,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         return { tipo: 'no_autorizado', mensaje: '⛔ No autorizado: ' + nombre + ' (' + razon + ')' };
       }
 
-      return registrarEntradaSalida_(nombre, fecha);
+      const visitaPermitido = snap.docs[0].data().visita || null;
+      return registrarEntradaSalida_(nombre, fecha, visitaPermitido);
     }
 
     async function registrarNoAutorizado_(nombre) {
@@ -950,7 +966,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       return (modo === 'entrada' || modo === 'salida') ? modo : null;
     }
 
-    function registrarEntradaSalida_(nombre, fecha) {
+    function registrarEntradaSalida_(nombre, fecha, detalle) {
       const modo = modoForzado_();
       const ref = db.collection('registros').doc(idRegistro(nombre, fecha));
       const hora = horaActual();
@@ -958,12 +974,13 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       return db.runTransaction(async function (tx) {
         const doc = await tx.get(ref);
         const creado = doc.exists ? doc.data().creado : Date.now();
+        const detalleFinal = doc.exists ? (doc.data().detalle || detalle || null) : (detalle || null);
 
         if (modo === 'entrada') {
           if (doc.exists && doc.data().horaEntrada) {
             return { tipo: 'ya_usado', mensaje: '⚠️ Este código ya registró su entrada hoy (' + doc.data().horaEntrada + ')' };
           }
-          tx.set(ref, { nombre: nombre, fecha: fecha, horaEntrada: hora, autorizado: true, creado: creado }, { merge: true });
+          tx.set(ref, { nombre: nombre, fecha: fecha, horaEntrada: hora, autorizado: true, creado: creado, detalle: detalleFinal }, { merge: true });
           return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
         }
 
@@ -971,7 +988,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           if (doc.exists && doc.data().horaSalida) {
             return { tipo: 'ya_usado', mensaje: '⚠️ Este código ya registró su salida hoy (' + doc.data().horaSalida + ')' };
           }
-          tx.set(ref, { nombre: nombre, fecha: fecha, horaSalida: hora, autorizado: true, creado: creado }, { merge: true });
+          tx.set(ref, { nombre: nombre, fecha: fecha, horaSalida: hora, autorizado: true, creado: creado, detalle: detalleFinal }, { merge: true });
           return { tipo: 'salida', mensaje: '🚪 Salida registrada: ' + nombre + ' (' + hora + ')' };
         }
 
@@ -979,7 +996,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         if (!doc.exists) {
           tx.set(ref, {
             nombre: nombre, fecha: fecha, horaEntrada: hora,
-            horaSalida: null, autorizado: true, creado: creado
+            horaSalida: null, autorizado: true, creado: creado, detalle: detalleFinal
           });
           return { tipo: 'entrada', mensaje: '✅ Entrada registrada: ' + nombre + ' (' + hora + ')' };
         }
@@ -1000,10 +1017,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     let qrActual = null;
 
     function generarQR() {
-      const nombre = document.getElementById('gen-nombre').value.trim();
+      const nombre = mayus_(document.getElementById('gen-nombre').value);
       const fecha = document.getElementById('gen-fecha').value;
-      const visita = document.getElementById('gen-visita').value.trim();
-      const correo = document.getElementById('gen-correo').value.trim();
+      const visita = mayus_(document.getElementById('gen-visita').value);
+      const correo = mayus_(document.getElementById('gen-correo').value);
       const mensajeElem = document.getElementById('gen-mensaje');
       const boton = document.getElementById('btn-generar');
 
@@ -1029,7 +1046,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           contenedor.innerHTML = '';
 
           new QRCode(contenedor, {
-            text: contenido, width: 220, height: 220,
+            text: utf8ParaQR_(contenido), width: 220, height: 220,
             colorDark: '#000000', colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M
           });
@@ -1103,11 +1120,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     let qrPermanenteActual = null;
 
     function generarQRPermanente() {
-      const nombre = document.getElementById('genp-nombre').value.trim();
-      const parentesco = document.getElementById('genp-parentesco').value.trim();
-      const grupo = document.getElementById('genp-grupo').value.trim();
-      const seccion = document.getElementById('genp-seccion').value.trim();
-      const correo = document.getElementById('genp-correo').value.trim();
+      const nombre = mayus_(document.getElementById('genp-nombre').value);
+      const parentesco = mayus_(document.getElementById('genp-parentesco').value);
+      const grupo = mayus_(document.getElementById('genp-grupo').value);
+      const seccion = mayus_(document.getElementById('genp-seccion').value);
+      const correo = mayus_(document.getElementById('genp-correo').value);
       const mensajeElem = document.getElementById('genp-mensaje');
       const boton = document.getElementById('btn-generar-permanente');
 
@@ -1133,7 +1150,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           contenedor.innerHTML = '';
 
           new QRCode(contenedor, {
-            text: contenido, width: 220, height: 220,
+            text: utf8ParaQR_(contenido), width: 220, height: 220,
             colorDark: '#000000', colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M
           });
@@ -1299,7 +1316,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
         const contenido = JSON.stringify({ tipo: 'permanente', id: id, nombre: nombre });
         new QRCode(contenedorTemp, {
-          text: contenido, width: 260, height: 260,
+          text: utf8ParaQR_(contenido), width: 260, height: 260,
           colorDark: '#000000', colorLight: '#ffffff',
           correctLevel: QRCode.CorrectLevel.M
         });
@@ -1450,20 +1467,20 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
       lineas.forEach(function (linea) {
         const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
-        const correo = (partes[0] || '').trim();
-        const grupo = (partes[1] || '').trim();
-        const seccion = (partes[2] || '').trim();
-        const nombreMama = (partes[3] || '').trim();
-        const nombrePapa = (partes[4] || '').trim();
+        const correo = mayus_(partes[0] || '');
+        const grupo = mayus_(partes[1] || '');
+        const seccion = mayus_(partes[2] || '');
+        const nombreMama = mayus_(partes[3] || '');
+        const nombrePapa = mayus_(partes[4] || '');
 
         if (nombreMama) {
           const refMama = db.collection('permanentes').doc();
-          lote.set(refMama, { nombre: nombreMama, parentesco: 'Mamá', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
+          lote.set(refMama, { nombre: nombreMama, parentesco: 'MAMÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
           personas.push({ id: refMama.id, nombre: nombreMama });
         }
         if (nombrePapa) {
           const refPapa = db.collection('permanentes').doc();
-          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'Papá', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
+          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'PAPÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
           personas.push({ id: refPapa.id, nombre: nombrePapa });
         }
       });
@@ -1507,7 +1524,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         contenedorResultados.appendChild(tarjeta);
 
         new QRCode(qrDiv, {
-          text: contenido, width: 260, height: 260,
+          text: utf8ParaQR_(contenido), width: 260, height: 260,
           colorDark: '#000000', colorLight: '#ffffff',
           correctLevel: QRCode.CorrectLevel.M
         });
@@ -1560,7 +1577,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
     function renderizarHistorial() {
       const tbody = document.getElementById('tabla-registros');
-      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
       const desde = document.getElementById('historial-fecha-desde');
       if (desde) desde.value = '';
       const hasta = document.getElementById('historial-fecha-hasta');
@@ -1573,7 +1590,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
           dibujarTablaHistorial_(registrosCache);
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6">Error: ' + error.message + '</td></tr>';
         });
     }
 
@@ -1588,9 +1605,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
         return '<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
           '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
+          '<td>' + (r.detalle || '-') + '</td>' +
           '<td>' + badge + '</td></tr>';
       });
-      tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Sin registros aún.</td></tr>';
+      tbody.innerHTML = filas.join('') || '<tr><td colspan="6">Sin registros aún.</td></tr>';
     }
 
     function filtrarHistorialPorFecha() {
@@ -1619,10 +1637,10 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
     function exportarCSV() {
       if (historialVistaActual.length === 0) { alert('No hay registros para exportar.'); return; }
-      let csvContent = 'data:text/csv;charset=utf-8,Nombre,Fecha,Hora Entrada,Hora Salida,Autorizado\n';
+      let csvContent = 'data:text/csv;charset=utf-8,Nombre,Fecha,Hora Entrada,Hora Salida,Sección/Visita a,Autorizado\n';
       historialVistaActual.forEach(function (r) {
         const estado = r.autorizado ? 'SI' : 'NO';
-        csvContent += '"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',' + estado + '\n';
+        csvContent += '"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',"' + (r.detalle || '') + '",' + estado + '\n';
       });
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement('a');
@@ -1637,11 +1655,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // AGENDAR CITAS
     // ============================================================
     function agendarCita() {
-      const nombreAlumno = document.getElementById('cita-nombre-alumno').value.trim();
-      const correoAlumno = document.getElementById('cita-correo-alumno').value.trim();
+      const nombreAlumno = mayus_(document.getElementById('cita-nombre-alumno').value);
+      const correoAlumno = mayus_(document.getElementById('cita-correo-alumno').value);
       const fecha = document.getElementById('cita-fecha').value;
       const hora = document.getElementById('cita-hora').value;
-      const visita = document.getElementById('cita-visita').value.trim();
+      const visita = mayus_(document.getElementById('cita-visita').value);
       const mensajeElem = document.getElementById('cita-mensaje');
       const boton = document.getElementById('btn-agendar-cita');
 
@@ -1708,12 +1726,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     // EVENTOS MASIVOS (activación/desactivación por grupo o sección)
     // ============================================================
     function programarEvento() {
-      const nombre = document.getElementById('evento-nombre').value.trim();
+      const nombre = mayus_(document.getElementById('evento-nombre').value);
       const fecha = document.getElementById('evento-fecha').value;
       const horaInicio = document.getElementById('evento-hora-inicio').value;
       const horaFin = document.getElementById('evento-hora-fin').value;
-      const grupo = document.getElementById('evento-grupo').value;
-      const seccion = document.getElementById('evento-seccion').value;
+      const grupo = mayus_(document.getElementById('evento-grupo').value);
+      const seccion = mayus_(document.getElementById('evento-seccion').value);
       const mensajeElem = document.getElementById('evento-mensaje');
       const boton = document.getElementById('btn-programar-evento');
 
