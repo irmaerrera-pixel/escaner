@@ -293,6 +293,7 @@
 
   <nav id="nav-principal">
     <button onclick="navegarA('vista-escaner')"><span class="material-symbols-outlined">qr_code_scanner</span><small>Escáner</small></button>
+    <button onclick="navegarA('vista-tarjetas')"><span class="material-symbols-outlined">badge</span><small>Tarjetas</small></button>
     <button onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span><small>Generar QR</small></button>
     <button onclick="navegarA('vista-citas')"><span class="material-symbols-outlined">event</span><small>Citas</small></button>
     <button onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span><small>Historial</small></button>
@@ -342,7 +343,6 @@
       <button onclick="navegarSubvista('subvista-fecha')"><span class="material-symbols-outlined">calendar_month</span> QR por Fecha</button>
       <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
-      <button onclick="navegarSubvista('subvista-tarjetas')"><span class="material-symbols-outlined">badge</span> Tarjetas Visitante</button>
     </nav>
 
     <!-- Subvista: QR por Fecha -->
@@ -460,50 +460,49 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
     </div>
+  </main>
 
-    <!-- Subvista: Tarjetas Visitante -->
-    <div id="subvista-tarjetas" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
-      <h3>Tarjetas de Visitante (reutilizables)</h3>
-      <p style="font-size:0.85em; color:#495057; text-align:left;">
-        30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
-        el día que llega, y se liberan solas automáticamente a la medianoche para el
-        siguiente día.
-      </p>
+  <!-- Vista Tarjetas Visitante -->
+  <main id="vista-tarjetas" class="vista card" style="display: none;">
+    <h2>Tarjetas de Visitante (reutilizables)</h2>
+    <p style="font-size:0.85em; color:#495057; text-align:left;">
+      30 tarjetas físicas con un código QR fijo cada una. Las asignas a un visitante
+      el día que llega, y se liberan automáticamente en cuanto registra su salida (o
+      a la medianoche, como respaldo).
+    </p>
 
-      <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
-        <span class="material-symbols-outlined">badge</span> Generar las 30 tarjetas (una sola vez)
-      </button>
-      <button id="btn-descargar-tarjetas" class="secondary" style="display:none;" onclick="descargarTarjetasZip()">Descargar todas (ZIP)</button>
+    <button id="btn-generar-tarjetas" onclick="generarTarjetasIniciales()">
+      <span class="material-symbols-outlined">badge</span> Generar las 30 tarjetas (una sola vez)
+    </button>
+    <button id="btn-descargar-tarjetas" class="secondary" style="display:none;" onclick="descargarTarjetasZip()">Descargar todas (ZIP)</button>
 
-      <div id="tarjetas-mensaje" class="status normal"></div>
-      <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
+    <div id="tarjetas-mensaje" class="status normal"></div>
+    <div id="tarjetas-qrs" style="margin-top:15px; text-align:left;"></div>
 
-      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+    <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
 
-      <h3 style="margin-top:25px;">Asignar tarjeta a un visitante</h3>
-      <div class="form-group">
-        <label>Tarjeta libre</label>
-        <select id="asignar-codigo"><option value="">Selecciona una tarjeta libre...</option></select>
-      </div>
-      <div class="form-group">
-        <label>Nombre del visitante</label>
-        <input type="text" id="asignar-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
-      </div>
-      <div class="form-group">
-        <label>Persona o evento al que asiste</label>
-        <input type="text" id="asignar-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Dirección...">
-      </div>
-      <button onclick="asignarTarjeta()">Asignar tarjeta</button>
-
-      <div id="asignar-mensaje" class="status normal"></div>
-
-      <h3 style="margin-top:25px;">Estado de las tarjetas</h3>
-      <table>
-        <thead><tr><th>Código</th><th>Nombre</th><th>Visita a</th><th>Estado</th><th></th></tr></thead>
-        <tbody id="tabla-tarjetas"><tr><td colspan="5">Cargando...</td></tr></tbody>
-      </table>
+    <h3 style="margin-top:25px;">Asignar tarjeta a un visitante</h3>
+    <div class="form-group">
+      <label>Tarjeta libre</label>
+      <select id="asignar-codigo"><option value="">Selecciona una tarjeta libre...</option></select>
     </div>
+    <div class="form-group">
+      <label>Nombre del visitante</label>
+      <input type="text" id="asignar-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
+    </div>
+    <div class="form-group">
+      <label>Persona o evento al que asiste</label>
+      <input type="text" id="asignar-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Dirección...">
+    </div>
+    <button onclick="asignarTarjeta()">Asignar tarjeta</button>
+
+    <div id="asignar-mensaje" class="status normal"></div>
+
+    <h3 style="margin-top:25px;">Estado de las tarjetas</h3>
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th>Visita a</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-tarjetas"><tr><td colspan="5">Cargando...</td></tr></tbody>
+    </table>
   </main>
 
   <!-- Vista Agendar Cita -->
@@ -724,10 +723,11 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function aplicarPermisosRol_() {
       const botones = document.querySelectorAll('#nav-principal button');
       if (rolActual === 'checador') {
-        botones.forEach(function (b, i) { b.style.display = (i === 0) ? 'flex' : 'none'; });
+        // Escáner (0) y Tarjetas (1)
+        botones.forEach(function (b, i) { b.style.display = (i === 0 || i === 1) ? 'flex' : 'none'; });
         navegarA('vista-escaner');
       } else if (rolActual === 'citas') {
-        botones.forEach(function (b, i) { b.style.display = (i === 2) ? 'flex' : 'none'; });
+        botones.forEach(function (b, i) { b.style.display = (i === 3) ? 'flex' : 'none'; });
         navegarA('vista-citas');
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
@@ -821,11 +821,12 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       document.querySelectorAll('.vista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
-      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); renderizarTarjetas(); volverAlMenuGenerar(); }
+      if (vistaId === 'vista-tarjetas') renderizarTarjetas();
+      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-citas') { renderizarCitas(); renderizarEventos(); renderizarPermanentes(); volverAlMenuCitas(); }
 
       document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
-      const mapaNav = { 'vista-escaner': 0, 'vista-generar': 1, 'vista-citas': 2, 'vista-historial': 3 };
+      const mapaNav = { 'vista-escaner': 0, 'vista-tarjetas': 1, 'vista-generar': 2, 'vista-citas': 3, 'vista-historial': 4 };
       const botones = document.querySelectorAll('#nav-principal button');
       if (botones[mapaNav[vistaId]]) botones[mapaNav[vistaId]].classList.add('activo');
     }
