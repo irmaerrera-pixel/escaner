@@ -351,6 +351,14 @@
         <label>Fecha permitida de ingreso</label>
         <input type="date" id="gen-fecha">
       </div>
+      <div class="form-group">
+        <label>Persona o evento al que asiste</label>
+        <input type="text" id="gen-visita" placeholder="Ej. Orientación, Dirección, Junta de padres...">
+      </div>
+      <div class="form-group">
+        <label>Correo electrónico</label>
+        <input type="email" id="gen-correo" placeholder="Ej. correo@ejemplo.com">
+      </div>
       <button id="btn-generar" onclick="generarQR()">Generar QR</button>
       <button class="secondary" onclick="limpiarFormulario()">Nuevo</button>
 
@@ -362,8 +370,8 @@
 
       <h3 style="margin-top:25px;">Personas permitidas</h3>
       <table>
-        <thead><tr><th>Nombre</th><th>Fecha</th><th></th></tr></thead>
-        <tbody id="tabla-permitidos"><tr><td colspan="3">Cargando...</td></tr></tbody>
+        <thead><tr><th>Nombre</th><th>Fecha</th><th>Visita a</th><th>Correo</th><th></th></tr></thead>
+        <tbody id="tabla-permitidos"><tr><td colspan="5">Cargando...</td></tr></tbody>
       </table>
     </div>
 
@@ -994,11 +1002,13 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function generarQR() {
       const nombre = document.getElementById('gen-nombre').value.trim();
       const fecha = document.getElementById('gen-fecha').value;
+      const visita = document.getElementById('gen-visita').value.trim();
+      const correo = document.getElementById('gen-correo').value.trim();
       const mensajeElem = document.getElementById('gen-mensaje');
       const boton = document.getElementById('btn-generar');
 
-      if (!nombre || !fecha) {
-        mensajeElem.innerText = 'Completa el nombre y la fecha.';
+      if (!nombre || !fecha || !visita || !correo) {
+        mensajeElem.innerText = 'Completa nombre, fecha, persona/evento al que asiste, y correo.';
         mensajeElem.className = 'status error';
         return;
       }
@@ -1012,7 +1022,7 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       mensajeElem.innerText = 'Guardando en la lista de permitidos...';
       mensajeElem.className = 'status normal';
 
-      db.collection('permitidos').add({ nombre: nombre, fecha: fecha, creado: Date.now() })
+      db.collection('permitidos').add({ nombre: nombre, fecha: fecha, visita: visita, correo: correo, creado: Date.now() })
         .then(function () {
           const contenido = JSON.stringify({ nombre: nombre, fecha: fecha });
           const contenedor = document.getElementById('gen-qrcode');
@@ -1057,6 +1067,8 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
     function limpiarFormulario() {
       document.getElementById('gen-nombre').value = '';
       document.getElementById('gen-fecha').value = '';
+      document.getElementById('gen-visita').value = '';
+      document.getElementById('gen-correo').value = '';
       document.getElementById('gen-qrcode').innerHTML = '';
       document.getElementById('gen-resultado').style.display = 'none';
       document.getElementById('gen-mensaje').innerText = '';
@@ -1064,20 +1076,20 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
     function renderizarPermitidos() {
       const tbody = document.getElementById('tabla-permitidos');
-      tbody.innerHTML = '<tr><td colspan="3">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
 
       db.collection('permitidos').orderBy('creado', 'desc').get()
         .then(function (snap) {
           const filas = [];
           snap.forEach(function (doc) {
             const p = doc.data();
-            filas.push('<tr><td>' + p.nombre + '</td><td>' + p.fecha + '</td>' +
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + p.fecha + '</td><td>' + (p.visita || '-') + '</td><td>' + (p.correo || '-') + '</td>' +
               '<td><button class="danger small" onclick="eliminarPermitido(\'' + doc.id + '\')">Eliminar</button></td></tr>');
           });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="3">Aún no has generado códigos.</td></tr>';
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Aún no has generado códigos.</td></tr>';
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="3">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
         });
     }
 
