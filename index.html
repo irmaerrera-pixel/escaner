@@ -466,6 +466,26 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
 
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
+
+      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+
+      <h3 style="margin-top:25px;">Generar Personal en Lote (Lunes a Viernes)</h3>
+      <p style="font-size:0.85em; color:#495057; text-align:left;">
+        Para personal que sale de las instalaciones. Todos los códigos generados aquí
+        quedan automáticamente restringidos a Lunes-Viernes. Pega tus filas (una
+        persona por línea) en este orden:<br>
+        <code>Nombre &nbsp;|&nbsp; Puesto &nbsp;|&nbsp; Correo (opcional)</code>
+      </p>
+      <div class="form-group">
+        <textarea id="lote-personal-texto" rows="6" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
+          placeholder="Juan Pérez	Mantenimiento	juan@correo.com
+Ana Torres	Administración"></textarea>
+      </div>
+      <button id="btn-generar-lote-personal" onclick="generarLotePersonal()">Generar todos</button>
+      <button id="btn-descargar-lote-personal" class="secondary" style="display:none;" onclick="descargarLotePersonalZip()">Descargar todos (ZIP)</button>
+
+      <div id="lote-personal-mensaje" class="status normal"></div>
+      <div id="lote-personal-resultados" style="margin-top:15px; text-align:left;"></div>
     </div>
 
     <!-- Subvista: Generar Tarjetas Visitante -->
@@ -1746,6 +1766,137 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
         const link = document.createElement('a');
         link.href = URL.createObjectURL(contenido);
         link.download = 'codigos_qr_permanentes.zip';
+        link.click();
+      });
+    }
+
+    // ============================================================
+    // GENERACIÓN EN LOTE — PERSONAL (Lunes a Viernes)
+    // ============================================================
+    window.lotePersonalQRs = [];
+
+    async function generarLotePersonal() {
+      const texto = document.getElementById('lote-personal-texto').value.trim();
+      const mensajeElem = document.getElementById('lote-personal-mensaje');
+      const contenedorResultados = document.getElementById('lote-personal-resultados');
+      const boton = document.getElementById('btn-generar-lote-personal');
+      const botonDescargar = document.getElementById('btn-descargar-lote-personal');
+
+      if (!texto) {
+        mensajeElem.innerText = 'Pega al menos una fila.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      const lineas = texto.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      if (lineas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ninguna fila válida.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      botonDescargar.style.display = 'none';
+      contenedorResultados.innerHTML = '';
+      window.lotePersonalQRs = [];
+
+      const lote = db.batch();
+      const personas = [];
+
+      lineas.forEach(function (linea) {
+        const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
+        const nombre = mayus_(partes[0] || '');
+        const puesto = mayus_(partes[1] || '');
+        const correo = mayus_(partes[2] || '');
+        if (!nombre) return;
+
+        const ref = db.collection('permanentes').doc();
+        lote.set(ref, {
+          nombre: nombre, parentesco: puesto || null, grupo: null, seccion: null,
+          correo: correo || null, soloEntreSemana: true, activo: true, creado: Date.now()
+        });
+        personas.push({ id: ref.id, nombre: nombre });
+      });
+
+      if (personas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ningún nombre válido en las filas.';
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      mensajeElem.innerText = 'Guardando ' + personas.length + ' código(s) en la base de datos...';
+      mensajeElem.className = 'status normal';
+
+      try {
+        await lote.commit();
+      } catch (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      let pendientes = personas.length;
+
+      personas.forEach(function (persona) {
+        const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:280px;';
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:0.8em; margin-top:4px; word-wrap:break-word;';
+        etiqueta.innerText = persona.nombre + ' (L-V)';
+        tarjeta.appendChild(etiqueta);
+        contenedorResultados.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: utf8ParaQR_(contenido), width: 260, height: 260,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        setTimeout(function () {
+          const canvas = qrDiv.querySelector('canvas');
+          const img = qrDiv.querySelector('img');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+          window.lotePersonalQRs.push({ nombre: persona.nombre, dataUrl: dataUrl });
+
+          pendientes--;
+          if (pendientes === 0) {
+            mensajeElem.innerText = '✅ ' + personas.length + ' código(s) de personal generado(s) (Lunes-Viernes).';
+            mensajeElem.className = 'status exito';
+            boton.disabled = false;
+            botonDescargar.style.display = 'inline-block';
+            renderizarPermanentes();
+          }
+        }, 60);
+      });
+    }
+
+    function descargarLotePersonalZip() {
+      if (!window.lotePersonalQRs || window.lotePersonalQRs.length === 0) {
+        alert('Genera un lote primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.lotePersonalQRs.forEach(function (p) {
+        if (!p.dataUrl) return;
+        const base64 = p.dataUrl.split(',')[1];
+        const nombreArchivo = 'qr_personal_' + p.nombre.replace(/\s+/g, '_') + '.png';
+        zip.file(nombreArchivo, base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'codigos_qr_personal.zip';
         link.click();
       });
     }
