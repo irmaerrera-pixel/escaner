@@ -289,7 +289,12 @@
       </div>
     </div>
 
-    <main class="vista card" style="margin-bottom:20px;">
+    <nav id="portal-nav" style="margin-bottom:15px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <button onclick="navegarPortal('portal-vista-codigos')"><span class="material-symbols-outlined">qr_code_2</span> Mis Códigos</button>
+      <button class="secondary" onclick="navegarPortal('portal-vista-invitados')"><span class="material-symbols-outlined">group_add</span> Invitados</button>
+    </nav>
+
+    <main id="portal-vista-codigos" class="vista card" style="margin-bottom:20px;">
       <h2>Mis Códigos de Acceso</h2>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Se actualizan solos cada pocos segundos (en <span id="portal-segundos">30</span> s). No sirve
@@ -298,7 +303,7 @@
       <div id="portal-codigos"></div>
     </main>
 
-    <main class="vista card">
+    <main id="portal-vista-invitados" class="vista card" style="display:none;">
       <h2>Registrar Invitados</h2>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Registra aquí a las personas adicionales que te acompañarán al
@@ -2105,6 +2110,18 @@ Ana Torres	Administración"></textarea>
       renderizarCodigosPortal_(registros);
       poblarSelectEventosActivos_();
       renderizarMisInvitados();
+      navegarPortal('portal-vista-codigos');
+    }
+
+    // Cambia entre "Mis Códigos" e "Invitados" dentro del Portal de Padres.
+    function navegarPortal(vistaId) {
+      document.getElementById('portal-vista-codigos').style.display = (vistaId === 'portal-vista-codigos') ? 'block' : 'none';
+      document.getElementById('portal-vista-invitados').style.display = (vistaId === 'portal-vista-invitados') ? 'block' : 'none';
+
+      document.querySelectorAll('#portal-nav button').forEach(function (b, i) {
+        const esteBoton = (vistaId === 'portal-vista-codigos' && i === 0) || (vistaId === 'portal-vista-invitados' && i === 1);
+        b.classList.toggle('secondary', !esteBoton);
+      });
     }
 
     function salirPortalPadres() {
