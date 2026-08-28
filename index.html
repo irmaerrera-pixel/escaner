@@ -1629,3 +1629,828 @@ Ana Torres	Administración"></textarea>
     // ============================================================
     // GENERACIÓN EN LOTE (varios QR permanentes a la vez)
     // ============================================================
+    window.loteQRs = []; // se llena al generar: [{nombre, correo, dataUrl}]
+
+    async function generarLote() {
+      const texto = document.getElementById('lote-texto').value.trim();
+      const mensajeElem = document.getElementById('lote-mensaje');
+      const contenedorResultados = document.getElementById('lote-resultados');
+      const boton = document.getElementById('btn-generar-lote');
+      const botonDescargar = document.getElementById('btn-descargar-lote');
+
+      if (!texto) {
+        mensajeElem.innerText = 'Pega al menos un nombre.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      const lineas = texto.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      if (lineas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ninguna fila válida.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      botonDescargar.style.display = 'none';
+      contenedorResultados.innerHTML = '';
+      window.loteQRs = [];
+
+      // Cada fila trae: correo del alumno, nombre de la mamá, nombre del papá.
+      // Detecta si viene separado por tabulador (al pegar de Excel) o por coma.
+      const lote = db.batch();
+      const personas = [];
+
+      lineas.forEach(function (linea) {
+        const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
+        const correo = mayus_(partes[0] || '');
+        const grupo = mayus_(partes[1] || '');
+        const seccion = mayus_(partes[2] || '');
+        const nombreMama = mayus_(partes[3] || '');
+        const nombrePapa = mayus_(partes[4] || '');
+
+        if (nombreMama) {
+          const refMama = db.collection('permanentes').doc();
+          lote.set(refMama, { nombre: nombreMama, parentesco: 'MAMÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
+          personas.push({ id: refMama.id, nombre: nombreMama });
+        }
+        if (nombrePapa) {
+          const refPapa = db.collection('permanentes').doc();
+          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'PAPÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
+          personas.push({ id: refPapa.id, nombre: nombrePapa });
+        }
+      });
+
+      if (personas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ningún nombre de mamá o papá en las filas.';
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      mensajeElem.innerText = 'Guardando ' + personas.length + ' código(s) en la base de datos...';
+      mensajeElem.className = 'status normal';
+
+      try {
+        await lote.commit();
+      } catch (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      // Genera visualmente cada QR (para vista previa y para el ZIP)
+      let pendientes = personas.length;
+
+      personas.forEach(function (persona) {
+        const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:280px;';
+
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:0.8em; margin-top:4px; word-wrap:break-word;';
+        etiqueta.innerText = persona.nombre;
+        tarjeta.appendChild(etiqueta);
+
+        contenedorResultados.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: utf8ParaQR_(contenido), width: 260, height: 260,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        // La librería dibuja de forma síncrona, pero damos un pequeño margen
+        // para asegurar que el canvas ya existe antes de leerlo.
+        setTimeout(function () {
+          const canvas = qrDiv.querySelector('canvas');
+          const img = qrDiv.querySelector('img');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+          window.loteQRs.push({ nombre: persona.nombre, dataUrl: dataUrl });
+
+          pendientes--;
+          if (pendientes === 0) {
+            mensajeElem.innerText = '✅ ' + personas.length + ' código(s) generado(s) y agregado(s) a permanentes.';
+            mensajeElem.className = 'status exito';
+            boton.disabled = false;
+            botonDescargar.style.display = 'inline-block';
+            renderizarPermanentes();
+          }
+        }, 60);
+      });
+    }
+
+    function descargarLoteZip() {
+      if (!window.loteQRs || window.loteQRs.length === 0) {
+        alert('Genera un lote primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.loteQRs.forEach(function (p) {
+        if (!p.dataUrl) return;
+        const base64 = p.dataUrl.split(',')[1];
+        const nombreArchivo = 'qr_' + p.nombre.replace(/\s+/g, '_') + '.png';
+        zip.file(nombreArchivo, base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'codigos_qr_permanentes.zip';
+        link.click();
+      });
+    }
+
+    // ============================================================
+    // GENERACIÓN EN LOTE — PERSONAL (Lunes a Viernes)
+    // ============================================================
+    window.lotePersonalQRs = [];
+
+    async function generarLotePersonal() {
+      const texto = document.getElementById('lote-personal-texto').value.trim();
+      const mensajeElem = document.getElementById('lote-personal-mensaje');
+      const contenedorResultados = document.getElementById('lote-personal-resultados');
+      const boton = document.getElementById('btn-generar-lote-personal');
+      const botonDescargar = document.getElementById('btn-descargar-lote-personal');
+
+      if (!texto) {
+        mensajeElem.innerText = 'Pega al menos una fila.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      const lineas = texto.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      if (lineas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ninguna fila válida.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      botonDescargar.style.display = 'none';
+      contenedorResultados.innerHTML = '';
+      window.lotePersonalQRs = [];
+
+      const lote = db.batch();
+      const personas = [];
+
+      lineas.forEach(function (linea) {
+        const partes = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(',');
+        const nombre = mayus_(partes[0] || '');
+        const puesto = mayus_(partes[1] || '');
+        const correo = mayus_(partes[2] || '');
+        if (!nombre) return;
+
+        const ref = db.collection('permanentes').doc();
+        lote.set(ref, {
+          nombre: nombre, parentesco: puesto || null, grupo: null, seccion: null,
+          correo: correo || null, soloEntreSemana: true, activo: true, creado: Date.now()
+        });
+        personas.push({ id: ref.id, nombre: nombre });
+      });
+
+      if (personas.length === 0) {
+        mensajeElem.innerText = 'No se encontró ningún nombre válido en las filas.';
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      mensajeElem.innerText = 'Guardando ' + personas.length + ' código(s) en la base de datos...';
+      mensajeElem.className = 'status normal';
+
+      try {
+        await lote.commit();
+      } catch (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+        return;
+      }
+
+      let pendientes = personas.length;
+
+      personas.forEach(function (persona) {
+        const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:280px;';
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:0.8em; margin-top:4px; word-wrap:break-word;';
+        etiqueta.innerText = persona.nombre + ' (L-V)';
+        tarjeta.appendChild(etiqueta);
+        contenedorResultados.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: utf8ParaQR_(contenido), width: 260, height: 260,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        setTimeout(function () {
+          const canvas = qrDiv.querySelector('canvas');
+          const img = qrDiv.querySelector('img');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+          window.lotePersonalQRs.push({ nombre: persona.nombre, dataUrl: dataUrl });
+
+          pendientes--;
+          if (pendientes === 0) {
+            mensajeElem.innerText = '✅ ' + personas.length + ' código(s) de personal generado(s) (Lunes-Viernes).';
+            mensajeElem.className = 'status exito';
+            boton.disabled = false;
+            botonDescargar.style.display = 'inline-block';
+            renderizarPermanentes();
+          }
+        }, 60);
+      });
+    }
+
+    function descargarLotePersonalZip() {
+      if (!window.lotePersonalQRs || window.lotePersonalQRs.length === 0) {
+        alert('Genera un lote primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.lotePersonalQRs.forEach(function (p) {
+        if (!p.dataUrl) return;
+        const base64 = p.dataUrl.split(',')[1];
+        const nombreArchivo = 'qr_personal_' + p.nombre.replace(/\s+/g, '_') + '.png';
+        zip.file(nombreArchivo, base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'codigos_qr_personal.zip';
+        link.click();
+      });
+    }
+
+    // ============================================================
+    // TARJETAS DE VISITANTE (30 tarjetas físicas reutilizables)
+    // ============================================================
+    const TOTAL_TARJETAS = 30;
+    let tarjetasCache = [];
+    window.tarjetasQRs = []; // para el ZIP: [{codigo, dataUrl}]
+
+    // Crea las 30 tarjetas en Firestore (solo si aún no existen) y
+    // genera sus 30 códigos QR fijos para imprimir y plastificar.
+    async function generarTarjetasIniciales() {
+      const mensajeElem = document.getElementById('tarjetas-mensaje');
+      const boton = document.getElementById('btn-generar-tarjetas');
+      const botonDescargar = document.getElementById('btn-descargar-tarjetas');
+      const contenedor = document.getElementById('tarjetas-qrs');
+
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Verificando tarjetas existentes...';
+      mensajeElem.className = 'status normal';
+      contenedor.innerHTML = '';
+      window.tarjetasQRs = [];
+
+      const yaExisten = await db.collection('tarjetas').limit(1).get();
+      if (!yaExisten.empty) {
+        if (!confirm('Ya existen tarjetas creadas. ¿Quieres volver a generar los 30 códigos QR para imprimir de nuevo (no se borran ni se reasignan las que ya existen)?')) {
+          boton.disabled = false;
+          mensajeElem.innerText = '';
+          return;
+        }
+      } else {
+        mensajeElem.innerText = 'Creando las 30 tarjetas...';
+        const lote = db.batch();
+        for (let i = 1; i <= TOTAL_TARJETAS; i++) {
+          const codigo = 'V' + String(i).padStart(2, '0');
+          const ref = db.collection('tarjetas').doc(codigo);
+          lote.set(ref, { nombre: null, fecha: null, visita: null, activo: false, creado: Date.now() });
+        }
+        await lote.commit();
+      }
+
+      mensajeElem.innerText = 'Generando ' + TOTAL_TARJETAS + ' códigos QR para imprimir...';
+
+      let pendientes = TOTAL_TARJETAS;
+      for (let i = 1; i <= TOTAL_TARJETAS; i++) {
+        const codigo = 'V' + String(i).padStart(2, '0');
+        const contenido = JSON.stringify({ tipo: 'tarjeta', codigo: codigo });
+
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:200px;';
+        const qrDiv = document.createElement('div');
+        tarjeta.appendChild(qrDiv);
+        const etiqueta = document.createElement('div');
+        etiqueta.style.cssText = 'font-size:1em; font-weight:700; margin-top:4px;';
+        etiqueta.innerText = codigo;
+        tarjeta.appendChild(etiqueta);
+        contenedor.appendChild(tarjeta);
+
+        new QRCode(qrDiv, {
+          text: codigo === codigo ? contenido : contenido, width: 180, height: 180,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        (function (codigoActual, qrDivActual) {
+          setTimeout(function () {
+            const canvas = qrDivActual.querySelector('canvas');
+            const img = qrDivActual.querySelector('img');
+            const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            window.tarjetasQRs.push({ codigo: codigoActual, dataUrl: dataUrl });
+
+            pendientes--;
+            if (pendientes === 0) {
+              mensajeElem.innerText = '✅ ' + TOTAL_TARJETAS + ' tarjetas listas. Descárgalas e imprímelas.';
+              mensajeElem.className = 'status exito';
+              boton.disabled = false;
+              botonDescargar.style.display = 'inline-block';
+              renderizarTarjetas();
+            }
+          }, 60);
+        })(codigo, qrDiv);
+      }
+    }
+
+    function descargarTarjetasZip() {
+      if (!window.tarjetasQRs || window.tarjetasQRs.length === 0) {
+        alert('Genera las tarjetas primero.');
+        return;
+      }
+      const zip = new JSZip();
+      window.tarjetasQRs.forEach(function (t) {
+        if (!t.dataUrl) return;
+        const base64 = t.dataUrl.split(',')[1];
+        zip.file('tarjeta_' + t.codigo + '.png', base64, { base64: true });
+      });
+      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(contenido);
+        link.download = 'tarjetas_visitante.zip';
+        link.click();
+      });
+    }
+
+    function renderizarTarjetas() {
+      const tbody = document.getElementById('tabla-tarjetas');
+      tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+
+      db.collection('tarjetas').orderBy('creado', 'asc').get()
+        .then(function (snap) {
+          tarjetasCache = [];
+          snap.forEach(function (doc) { tarjetasCache.push({ id: doc.id, datos: doc.data() }); });
+
+          const filas = tarjetasCache.map(function (item) {
+            const t = item.datos;
+            const badge = t.activo
+              ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Asignada</span>'
+              : '<span class="badge inactivo"><span class="material-symbols-outlined">check_circle_outline</span>Libre</span>';
+            const boton = t.activo
+              ? '<button class="danger small" onclick="liberarTarjeta(\'' + item.id + '\')">Liberar</button>'
+              : '';
+            return '<tr><td>' + item.id + '</td><td>' + (t.nombre || '-') + '</td><td>' + (t.visita || '-') + '</td><td>' + badge + '</td><td>' + boton + '</td></tr>';
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="5">Aún no has generado las tarjetas. Presiona "Generar las 30 tarjetas" arriba.</td></tr>';
+
+          poblarSelectTarjetasLibres_();
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="5">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function poblarSelectTarjetasLibres_() {
+      const select = document.getElementById('asignar-codigo');
+      const libres = tarjetasCache.filter(function (item) { return !item.datos.activo; });
+      select.innerHTML = '<option value="">Selecciona una tarjeta libre...</option>' +
+        libres.map(function (item) { return '<option value="' + item.id + '">' + item.id + '</option>'; }).join('');
+    }
+
+    function asignarTarjeta() {
+      const codigo = document.getElementById('asignar-codigo').value;
+      const nombre = mayus_(document.getElementById('asignar-nombre').value);
+      const visita = mayus_(document.getElementById('asignar-visita').value);
+      const mensajeElem = document.getElementById('asignar-mensaje');
+
+      if (!codigo || !nombre || !visita) {
+        mensajeElem.innerText = 'Elige una tarjeta, y completa nombre y visita.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      mensajeElem.innerText = 'Asignando...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('tarjetas').doc(codigo).update({
+        nombre: nombre, fecha: fechaHoy(), visita: visita, activo: true
+      }).then(function () {
+        mensajeElem.innerText = '✅ Tarjeta ' + codigo + ' asignada a ' + nombre + '.';
+        mensajeElem.className = 'status exito';
+        document.getElementById('asignar-nombre').value = '';
+        document.getElementById('asignar-visita').value = '';
+        renderizarTarjetas();
+      }).catch(function (error) {
+        mensajeElem.innerText = '⚠️ Error: ' + error.message;
+        mensajeElem.className = 'status error';
+      });
+    }
+
+    function liberarTarjeta(codigo) {
+      if (!confirm('¿Liberar la tarjeta ' + codigo + '?')) return;
+      db.collection('tarjetas').doc(codigo).update({
+        nombre: null, fecha: null, visita: null, activo: false
+      }).then(renderizarTarjetas);
+    }
+
+    // Revisa cada minuto si alguna tarjeta quedó asignada de un día
+    // anterior (fecha distinta a hoy) y la libera automáticamente.
+    // Corre mientras la app esté abierta, en cualquier pestaña.
+    async function revisarTarjetasVencidas_() {
+      try {
+        const hoy = fechaHoy();
+        const snap = await db.collection('tarjetas').where('activo', '==', true).get();
+        if (snap.empty) return;
+
+        const lote = db.batch();
+        let huboCambios = false;
+        snap.forEach(function (doc) {
+          const t = doc.data();
+          if (t.fecha !== hoy) {
+            lote.update(doc.ref, { nombre: null, fecha: null, visita: null, activo: false });
+            huboCambios = true;
+          }
+        });
+        if (huboCambios) await lote.commit();
+
+        if (huboCambios && document.getElementById('vista-generar').style.display !== 'none') {
+          renderizarTarjetas();
+        }
+      } catch (e) {
+        console.error('Error revisando tarjetas vencidas:', e);
+      }
+    }
+
+    // ============================================================
+    // HISTORIAL
+    // ============================================================
+    let registrosCache = [];
+    let historialVistaActual = [];
+
+    function renderizarHistorial() {
+      const tbody = document.getElementById('tabla-registros');
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+      const desde = document.getElementById('historial-fecha-desde');
+      if (desde) desde.value = '';
+      const hasta = document.getElementById('historial-fecha-hasta');
+      if (hasta) hasta.value = '';
+
+      db.collection('registros').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          registrosCache = [];
+          snap.forEach(function (doc) { registrosCache.push(doc.data()); });
+          dibujarTablaHistorial_(registrosCache);
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="6">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function dibujarTablaHistorial_(lista) {
+      historialVistaActual = lista;
+      const tbody = document.getElementById('tabla-registros');
+      const filas = lista.map(function (r) {
+        let badge;
+        if (!r.autorizado) badge = '<span class="badge no"><span class="material-symbols-outlined">block</span>No autorizado</span>';
+        else if (r.horaSalida) badge = '<span class="badge ok"><span class="material-symbols-outlined">task_alt</span>Completo</span>';
+        else badge = '<span class="badge pendiente"><span class="material-symbols-outlined">directions_walk</span>Dentro</span>';
+
+        return '<tr><td>' + r.nombre + '</td><td>' + r.fecha + '</td>' +
+          '<td>' + (r.horaEntrada || '-') + '</td><td>' + (r.horaSalida || '-') + '</td>' +
+          '<td>' + (r.detalle || '-') + '</td>' +
+          '<td>' + badge + '</td></tr>';
+      });
+      tbody.innerHTML = filas.join('') || '<tr><td colspan="6">Sin registros aún.</td></tr>';
+    }
+
+    function filtrarHistorialPorFecha() {
+      const desde = document.getElementById('historial-fecha-desde').value;
+      const hasta = document.getElementById('historial-fecha-hasta').value;
+
+      if (!desde && !hasta) { dibujarTablaHistorial_(registrosCache); return; }
+
+      const filtrados = registrosCache.filter(function (r) {
+        if (!r.fecha || r.fecha === '-') return false;
+        if (desde && r.fecha < desde) return false;
+        if (hasta && r.fecha > hasta) return false;
+        return true;
+      });
+      dibujarTablaHistorial_(filtrados);
+    }
+
+    function confirmarLimpiarHistorial() {
+      if (!confirm('¿Borrar todo el historial?')) return;
+      db.collection('registros').get().then(function (snap) {
+        const lote = db.batch();
+        snap.forEach(function (doc) { lote.delete(doc.ref); });
+        return lote.commit();
+      }).then(renderizarHistorial);
+    }
+
+    function exportarCSV() {
+      if (historialVistaActual.length === 0) { alert('No hay registros para exportar.'); return; }
+      let csvContent = 'data:text/csv;charset=utf-8,Nombre,Fecha,Hora Entrada,Hora Salida,Sección/Visita a,Autorizado\n';
+      historialVistaActual.forEach(function (r) {
+        const estado = r.autorizado ? 'SI' : 'NO';
+        csvContent += '"' + r.nombre + '",' + r.fecha + ',' + (r.horaEntrada || '') + ',' + (r.horaSalida || '') + ',"' + (r.detalle || '') + '",' + estado + '\n';
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', 'registros_' + fechaHoy() + '.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ============================================================
+    // AGENDAR CITAS
+    // ============================================================
+    function agendarCita() {
+      const nombreAlumno = mayus_(document.getElementById('cita-nombre-alumno').value);
+      const correoAlumno = mayus_(document.getElementById('cita-correo-alumno').value);
+      const fecha = document.getElementById('cita-fecha').value;
+      const hora = document.getElementById('cita-hora').value;
+      const visita = mayus_(document.getElementById('cita-visita').value);
+      const mensajeElem = document.getElementById('cita-mensaje');
+      const boton = document.getElementById('btn-agendar-cita');
+
+      if (!nombreAlumno || !correoAlumno || !fecha || !hora || !visita) {
+        mensajeElem.innerText = 'Completa todos los campos.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Guardando cita...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('citas').add({
+        nombreAlumno: nombreAlumno, correoAlumno: correoAlumno,
+        fecha: fecha, hora: hora, visita: visita,
+        activada: false, creado: Date.now()
+      }).then(function () {
+        mensajeElem.innerText = '✅ Cita agendada para ' + nombreAlumno + ' el ' + fecha + ' a las ' + hora + '.';
+        mensajeElem.className = 'status exito';
+        document.getElementById('cita-nombre-alumno').value = '';
+        document.getElementById('cita-correo-alumno').value = '';
+        document.getElementById('cita-fecha').value = '';
+        document.getElementById('cita-hora').value = '';
+        document.getElementById('cita-visita').value = '';
+        boton.disabled = false;
+        renderizarCitas();
+      }).catch(function (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+      });
+    }
+
+    function renderizarCitas() {
+      const tbody = document.getElementById('tabla-citas');
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+
+      db.collection('citas').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const c = doc.data();
+            const badge = c.activada
+              ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activado</span>'
+              : '<span class="badge pendiente"><span class="material-symbols-outlined">schedule</span>Pendiente</span>';
+            filas.push('<tr><td>' + c.nombreAlumno + '</td><td>' + c.fecha + '</td><td>' + c.hora + '</td>' +
+              '<td>' + c.visita + '</td><td>' + badge + '</td>' +
+              '<td><button class="danger small" onclick="eliminarCita(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="6">Sin citas agendadas.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="6">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function eliminarCita(id) {
+      if (!confirm('¿Eliminar esta cita?')) return;
+      db.collection('citas').doc(id).delete().then(renderizarCitas);
+    }
+
+    // ============================================================
+    // EVENTOS MASIVOS (activación/desactivación por grupo o sección)
+    // ============================================================
+    function programarEvento() {
+      const nombre = mayus_(document.getElementById('evento-nombre').value);
+      const fecha = document.getElementById('evento-fecha').value;
+      const horaInicio = document.getElementById('evento-hora-inicio').value;
+      const horaFin = document.getElementById('evento-hora-fin').value;
+      const grupo = mayus_(document.getElementById('evento-grupo').value);
+      const seccion = mayus_(document.getElementById('evento-seccion').value);
+      const mensajeElem = document.getElementById('evento-mensaje');
+      const boton = document.getElementById('btn-programar-evento');
+
+      if (!nombre || !fecha || !horaInicio) {
+        mensajeElem.innerText = 'Completa al menos el nombre, la fecha y la hora de inicio.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Guardando evento...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('eventos').add({
+        nombre: nombre, fecha: fecha, horaInicio: horaInicio, horaFin: horaFin || null,
+        grupo: grupo || null, seccion: seccion || null,
+        activado: false, desactivado: false, creado: Date.now()
+      }).then(function () {
+        mensajeElem.innerText = '✅ Evento "' + nombre + '" programado para ' + fecha + ' a las ' + horaInicio + '.';
+        mensajeElem.className = 'status exito';
+        document.getElementById('evento-nombre').value = '';
+        document.getElementById('evento-fecha').value = '';
+        document.getElementById('evento-hora-inicio').value = '';
+        document.getElementById('evento-hora-fin').value = '';
+        document.getElementById('evento-grupo').value = '';
+        document.getElementById('evento-seccion').value = '';
+        boton.disabled = false;
+        renderizarEventos();
+      }).catch(function (error) {
+        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.className = 'status error';
+        boton.disabled = false;
+      });
+    }
+
+    function renderizarEventos() {
+      const tbody = document.getElementById('tabla-eventos');
+      tbody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
+
+      db.collection('eventos').orderBy('creado', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const e = doc.data();
+            let badge;
+            if (e.desactivado) badge = '<span class="badge inactivo"><span class="material-symbols-outlined">event_busy</span>Finalizado</span>';
+            else if (e.activado) badge = '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activo</span>';
+            else badge = '<span class="badge pendiente"><span class="material-symbols-outlined">schedule</span>Pendiente</span>';
+
+            const filtro = (e.grupo || e.seccion)
+              ? [e.grupo, e.seccion].filter(Boolean).join(' / ')
+              : 'Todos';
+
+            filas.push('<tr><td>' + e.nombre + '</td><td>' + e.fecha + '</td><td>' + e.horaInicio + '</td>' +
+              '<td>' + (e.horaFin || '-') + '</td><td>' + filtro + '</td><td>' + badge + '</td>' +
+              '<td><button class="danger small" onclick="eliminarEvento(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin eventos programados.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="7">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function eliminarEvento(id) {
+      if (!confirm('¿Eliminar este evento?')) return;
+      db.collection('eventos').doc(id).delete().then(renderizarEventos);
+    }
+
+    // Construye la consulta de permanentes según el grupo/sección del evento
+    // (si alguno está vacío, no filtra por ese campo = aplica a todos).
+    function consultaPermanentesPorFiltro_(grupo, seccion) {
+      let q = db.collection('permanentes');
+      if (grupo) q = q.where('grupo', '==', grupo);
+      if (seccion) q = q.where('seccion', '==', seccion);
+      return q.get();
+    }
+
+    // Revisa cada minuto si hay eventos que deban activarse (llegó su hora
+    // de inicio) o desactivarse (llegó su hora de fin), y aplica el cambio
+    // a todos los QR permanentes del grupo/sección indicado (o a todos).
+    async function revisarEventosPendientes_() {
+      try {
+        const ahora = Date.now();
+
+        const pendientesInicio = await db.collection('eventos').where('activado', '==', false).get();
+        for (const doc of pendientesInicio.docs) {
+          const e = doc.data();
+          const momentoInicio = new Date(e.fecha + 'T' + e.horaInicio).getTime();
+          if (ahora >= momentoInicio) {
+            const permanentesSnap = await consultaPermanentesPorFiltro_(e.grupo, e.seccion);
+            if (!permanentesSnap.empty) {
+              const lote = db.batch();
+              permanentesSnap.forEach(function (p) { lote.update(p.ref, { activo: true }); });
+              lote.update(doc.ref, { activado: true });
+              await lote.commit();
+            } else {
+              await doc.ref.update({ activado: true });
+            }
+          }
+        }
+
+        const pendientesFin = await db.collection('eventos')
+          .where('activado', '==', true)
+          .where('desactivado', '==', false)
+          .get();
+        for (const doc of pendientesFin.docs) {
+          const e = doc.data();
+          if (!e.horaFin) continue;
+          const momentoFin = new Date(e.fecha + 'T' + e.horaFin).getTime();
+          if (ahora >= momentoFin) {
+            const permanentesSnap = await consultaPermanentesPorFiltro_(e.grupo, e.seccion);
+            if (!permanentesSnap.empty) {
+              const lote = db.batch();
+              permanentesSnap.forEach(function (p) { lote.update(p.ref, { activo: false }); });
+              lote.update(doc.ref, { desactivado: true });
+              await lote.commit();
+            } else {
+              await doc.ref.update({ desactivado: true });
+            }
+          }
+        }
+
+        if (document.getElementById('vista-citas').style.display !== 'none') renderizarEventos();
+        if (document.getElementById('vista-generar').style.display !== 'none') renderizarPermanentes();
+      } catch (e) {
+        console.error('Error revisando eventos pendientes:', e);
+      }
+    }
+
+    // Revisa cada minuto si hay citas cuya hora de activación (10 minutos
+    // antes de la cita) ya llegó, y activa el QR permanente del papá/mamá
+    // asociado (buscado por el correo del alumno). Corre mientras la app
+    // esté abierta, sin importar en qué pestaña esté el usuario.
+    async function revisarCitasPendientes_() {
+      try {
+        const snap = await db.collection('citas').where('activada', '==', false).get();
+        if (snap.empty) return;
+
+        const ahora = Date.now();
+
+        for (const doc of snap.docs) {
+          const c = doc.data();
+          const momentoCita = new Date(c.fecha + 'T' + c.hora).getTime();
+          const momentoActivacion = momentoCita - 10 * 60 * 1000;
+
+          if (ahora >= momentoActivacion) {
+            const permitidosSnap = await db.collection('permanentes')
+              .where('correo', '==', c.correoAlumno)
+              .get();
+
+            if (!permitidosSnap.empty) {
+              const lote = db.batch();
+              permitidosSnap.forEach(function (p) { lote.update(p.ref, { activo: true }); });
+              lote.update(doc.ref, { activada: true });
+              await lote.commit();
+            } else {
+              // No hay QR permanente ligado a ese correo; marca la cita
+              // como procesada de todas formas para no reintentarla en bucle.
+              await doc.ref.update({ activada: true });
+            }
+          }
+        }
+
+        // Si la vista de citas o de permanentes está abierta, refresca lo visible.
+        if (document.getElementById('vista-citas').style.display !== 'none') renderizarCitas();
+        if (document.getElementById('vista-generar').style.display !== 'none') renderizarPermanentes();
+      } catch (e) {
+        console.error('Error revisando citas pendientes:', e);
+      }
+    }
+
+    // ============================================================
+    // INICIO
+    // ============================================================
+    // El escáner, las citas y los eventos ahora se inician dentro de
+    // auth.onAuthStateChanged, una sola vez, justo después de que el
+    // usuario inicia sesión y se confirma su rol. Aquí ya no hace
+    // falta nada más.
+  </script>  </div>
+  <!-- fin de app-contenido -->
+
+</body>
+</html>
