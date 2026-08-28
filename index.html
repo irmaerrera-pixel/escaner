@@ -298,6 +298,7 @@
     <button onclick="navegarA('vista-evento')"><span class="material-symbols-outlined">campaign</span><small>Evento Masivo</small></button>
     <button onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span><small>Historial</small></button>
     <button onclick="navegarA('vista-invitados')"><span class="material-symbols-outlined">group_add</span><small>Invitados</small></button>
+    <button onclick="navegarA('vista-mi-qr')"><span class="material-symbols-outlined">qr_code_2</span><small>Mi QR</small></button>
   </nav>
 
   <!-- Vista Escáner -->
@@ -602,6 +603,42 @@ Ana Torres	Administración"></textarea>
     </table>
   </main>
 
+  <!-- Vista Mi QR (código dinámico de acceso para papás) -->
+  <main id="vista-mi-qr" class="vista card" style="display: none;">
+    <h2>Mi Código de Acceso</h2>
+    <p style="font-size:0.85em; color:#495057; text-align:left;">
+      Escribe el correo institucional del alumno para encontrar tu código.
+      El código se actualiza solo cada pocos segundos; no sirve una
+      captura de pantalla vieja.
+    </p>
+
+    <div id="mi-qr-busqueda">
+      <div class="form-group">
+        <label>Correo del alumno</label>
+        <input type="email" id="mi-qr-correo-alumno" class="mayusculas-auto" placeholder="Ej. alumno@correo.com">
+      </div>
+      <button id="btn-buscar-mi-qr" onclick="buscarMiQR()">Buscar mi código</button>
+    </div>
+
+    <div id="mi-qr-mensaje" class="status normal" style="display:none;"></div>
+
+    <!-- Si hay más de un código para ese correo (mamá y papá), se elige aquí -->
+    <div id="mi-qr-selector" style="display:none; margin-top:15px;">
+      <div class="form-group">
+        <label>¿Cuál código es el tuyo?</label>
+        <select id="mi-qr-select-persona"></select>
+      </div>
+      <button class="secondary" onclick="seleccionarMiQR()">Ver este código</button>
+    </div>
+
+    <div id="mi-qr-contenedor" style="display:none; text-align:center; margin-top:15px;">
+      <p id="mi-qr-nombre" style="font-weight:700; margin-bottom:6px;"></p>
+      <div id="mi-qr-codigo" style="display:flex; justify-content:center;"></div>
+      <p style="font-size:0.8em; color:var(--tinta-suave); margin-top:8px;">Se renueva en <span id="mi-qr-segundos">30</span> s</p>
+      <button class="secondary small" onclick="cambiarCorreoMiQR()" style="margin-top:10px;">Buscar otro correo</button>
+    </div>
+  </main>
+
   <!-- Vista Historial -->
   <main id="vista-historial" class="vista card" style="display: none;">
     <h2>Registros de Entrada/Salida</h2>
@@ -680,6 +717,7 @@ Ana Torres	Administración"></textarea>
         pantallaLogin.style.display = 'flex';
         appContenido.style.display = 'none';
         rolActual = null;
+        detenerMiQR_();
         return;
       }
 
@@ -745,8 +783,8 @@ Ana Torres	Administración"></textarea>
         botones.forEach(function (b, i) { b.style.display = (i === 3) ? 'flex' : 'none'; });
         navegarA('vista-evento');
       } else if (rolActual === 'padre') {
-        botones.forEach(function (b, i) { b.style.display = (i === 5) ? 'flex' : 'none'; });
-        navegarA('vista-invitados');
+        botones.forEach(function (b, i) { b.style.display = (i === 5 || i === 6) ? 'flex' : 'none'; });
+        navegarA('vista-mi-qr');
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
         if (botones[0]) botones[0].classList.add('activo');
@@ -849,9 +887,10 @@ Ana Torres	Administración"></textarea>
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-evento') { renderizarEventos(); }
       if (vistaId === 'vista-invitados') { poblarSelectEventosActivos_(); renderizarMisInvitados(); }
+      if (vistaId === 'vista-mi-qr') { iniciarMiQR_(); }
 
       document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
-      const mapaNav = { 'vista-escaner': 0, 'vista-tarjetas': 1, 'vista-generar': 2, 'vista-evento': 3, 'vista-historial': 4, 'vista-invitados': 5 };
+      const mapaNav = { 'vista-escaner': 0, 'vista-tarjetas': 1, 'vista-generar': 2, 'vista-evento': 3, 'vista-historial': 4, 'vista-invitados': 5, 'vista-mi-qr': 6 };
       const botones = document.querySelectorAll('#nav-principal button');
       if (botones[mapaNav[vistaId]]) botones[mapaNav[vistaId]].classList.add('activo');
     }
@@ -1045,6 +1084,18 @@ Ana Torres	Administración"></textarea>
         if (!datosPermanente.activo) {
           await registrarNoAutorizado_(datosPermanente.nombre);
           return { tipo: 'no_autorizado', mensaje: '⛔ Acceso desactivado: ' + datosPermanente.nombre };
+        }
+
+        // Los QR generados desde "Mi QR" (autoservicio del papá) llevan un
+        // timestamp y deben usarse casi al momento; si alguien comparte una
+        // captura de pantalla vieja, ya no pasa. Los QR clásicos (impresos
+        // o enviados por correo) no llevan "ts" y siguen sin caducar.
+        if (typeof datos.ts === 'number') {
+          const antiguedadSegundos = (Date.now() - datos.ts) / 1000;
+          if (antiguedadSegundos > 90 || antiguedadSegundos < -30) {
+            await registrarNoAutorizado_(datosPermanente.nombre);
+            return { tipo: 'no_autorizado', mensaje: '⛔ Código expirado: pide que ' + datosPermanente.nombre + ' vuelva a abrir su QR en la app' };
+          }
         }
 
         if (datosPermanente.soloEntreSemana && !esDiaEntreSemana_()) {
@@ -2367,6 +2418,210 @@ Ana Torres	Administración"></textarea>
         link.href = dataUrl;
         link.click();
       }, 80);
+    }
+
+    // ============================================================
+    // MI QR (código dinámico de acceso para papás)
+    // ============================================================
+    // El papá busca su código con el correo institucional DEL ALUMNO (los
+    // alumnos no tienen acceso propio, ese correo solo sirve para
+    // encontrar los QR permanentes de su familia). Si hay más de un
+    // registro para ese correo (mamá y papá), se le pide elegir cuál es
+    // el suyo. Una vez elegido, se dibuja un QR que se regenera solo cada
+    // 30s con un timestamp nuevo; el escáner rechaza cualquier QR de este
+    // tipo con más de 90s de antigüedad, así que una captura de pantalla
+    // vieja ya no sirve para prestarse el acceso.
+    const MI_QR_VIGENCIA_SEGUNDOS = 30;
+    const MI_QR_STORAGE_KEY = 'controlAcceso_miQR';
+    let miQrPermanenteId = null;
+    let miQrIntervaloRefresco = null;
+    let miQrIntervaloCuenta = null;
+    let miQrSegundosRestantes = MI_QR_VIGENCIA_SEGUNDOS;
+    let miQrResultadosBusqueda = []; // [{id, nombre, parentesco, activo}]
+
+    function detenerMiQR_() {
+      if (miQrIntervaloRefresco) { clearInterval(miQrIntervaloRefresco); miQrIntervaloRefresco = null; }
+      if (miQrIntervaloCuenta) { clearInterval(miQrIntervaloCuenta); miQrIntervaloCuenta = null; }
+      miQrPermanenteId = null;
+    }
+
+    function mostrarPantallaBusquedaMiQR_() {
+      detenerMiQR_();
+      document.getElementById('mi-qr-busqueda').style.display = 'block';
+      document.getElementById('mi-qr-selector').style.display = 'none';
+      document.getElementById('mi-qr-contenedor').style.display = 'none';
+      const mensajeElem = document.getElementById('mi-qr-mensaje');
+      mensajeElem.style.display = 'none';
+    }
+
+    function cambiarCorreoMiQR() {
+      try { localStorage.removeItem(MI_QR_STORAGE_KEY); } catch (e) {}
+      document.getElementById('mi-qr-correo-alumno').value = '';
+      mostrarPantallaBusquedaMiQR_();
+    }
+
+    // Al abrir la pestaña: si ya habíamos guardado el código elegido
+    // (mismo navegador), lo muestra directo sin pedir el correo de nuevo.
+    function iniciarMiQR_() {
+      mostrarPantallaBusquedaMiQR_();
+
+      let guardado = null;
+      try { guardado = JSON.parse(localStorage.getItem(MI_QR_STORAGE_KEY) || 'null'); } catch (e) {}
+
+      if (guardado && guardado.correoAlumno) {
+        document.getElementById('mi-qr-correo-alumno').value = guardado.correoAlumno;
+      }
+      if (guardado && guardado.permanenteId) {
+        mostrarMiQRDesdeId_(guardado.permanenteId);
+      }
+    }
+
+    function buscarMiQR() {
+      const correoAlumno = mayus_(document.getElementById('mi-qr-correo-alumno').value);
+      const mensajeElem = document.getElementById('mi-qr-mensaje');
+      const boton = document.getElementById('btn-buscar-mi-qr');
+      const selectorWrap = document.getElementById('mi-qr-selector');
+
+      selectorWrap.style.display = 'none';
+      document.getElementById('mi-qr-contenedor').style.display = 'none';
+
+      if (!correoAlumno) {
+        mensajeElem.innerText = 'Escribe el correo del alumno.';
+        mensajeElem.className = 'status error';
+        mensajeElem.style.display = 'block';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        mensajeElem.style.display = 'block';
+        return;
+      }
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Buscando...';
+      mensajeElem.className = 'status normal';
+      mensajeElem.style.display = 'block';
+
+      db.collection('permanentes').where('correo', '==', correoAlumno).get()
+        .then(function (snap) {
+          boton.disabled = false;
+
+          if (snap.empty) {
+            mensajeElem.innerText = 'No encontramos ningún código asociado a ese correo. Contacta a la administración del colegio.';
+            mensajeElem.className = 'status error';
+            return;
+          }
+
+          miQrResultadosBusqueda = [];
+          snap.forEach(function (doc) {
+            const d = doc.data();
+            miQrResultadosBusqueda.push({ id: doc.id, nombre: d.nombre, parentesco: d.parentesco || '', activo: !!d.activo });
+          });
+
+          if (miQrResultadosBusqueda.length === 1) {
+            mostrarMiQR_(miQrResultadosBusqueda[0], correoAlumno);
+            return;
+          }
+
+          // Varios registros para el mismo correo (ej. mamá y papá): que elija.
+          const select = document.getElementById('mi-qr-select-persona');
+          select.innerHTML = miQrResultadosBusqueda.map(function (r, i) {
+            const etiqueta = r.nombre + (r.parentesco ? ' (' + r.parentesco + ')' : '');
+            return '<option value="' + i + '">' + etiqueta + '</option>';
+          }).join('');
+          mensajeElem.style.display = 'none';
+          selectorWrap.style.display = 'block';
+          selectorWrap.dataset.correoAlumno = correoAlumno;
+        })
+        .catch(function (error) {
+          boton.disabled = false;
+          mensajeElem.innerText = '⚠️ Error al buscar: ' + error.message;
+          mensajeElem.className = 'status error';
+        });
+    }
+
+    function seleccionarMiQR() {
+      const select = document.getElementById('mi-qr-select-persona');
+      const selectorWrap = document.getElementById('mi-qr-selector');
+      const registro = miQrResultadosBusqueda[Number(select.value)];
+      if (!registro) return;
+      mostrarMiQR_(registro, selectorWrap.dataset.correoAlumno);
+    }
+
+    function mostrarMiQR_(registro, correoAlumno) {
+      const mensajeElem = document.getElementById('mi-qr-mensaje');
+      document.getElementById('mi-qr-busqueda').style.display = 'none';
+      document.getElementById('mi-qr-selector').style.display = 'none';
+
+      if (!registro.activo) {
+        mensajeElem.innerText = '⛔ El acceso de ' + registro.nombre + ' está desactivado por el momento. Contacta a la administración.';
+        mensajeElem.className = 'status error';
+        mensajeElem.style.display = 'block';
+        return;
+      }
+
+      try {
+        localStorage.setItem(MI_QR_STORAGE_KEY, JSON.stringify({ correoAlumno: correoAlumno, permanenteId: registro.id }));
+      } catch (e) {}
+
+      miQrPermanenteId = registro.id;
+      mensajeElem.style.display = 'none';
+      document.getElementById('mi-qr-nombre').innerText = registro.nombre + (registro.parentesco ? ' · ' + registro.parentesco : '');
+      document.getElementById('mi-qr-contenedor').style.display = 'block';
+
+      dibujarMiQR_();
+      if (miQrIntervaloRefresco) clearInterval(miQrIntervaloRefresco);
+      if (miQrIntervaloCuenta) clearInterval(miQrIntervaloCuenta);
+      miQrIntervaloRefresco = setInterval(dibujarMiQR_, MI_QR_VIGENCIA_SEGUNDOS * 1000);
+      miQrIntervaloCuenta = setInterval(actualizarContadorMiQR_, 1000);
+    }
+
+    // Recupera el código guardado (localStorage) por su id: vuelve a leer
+    // Firestore para confirmar que sigue activo antes de mostrarlo.
+    function mostrarMiQRDesdeId_(permanenteId) {
+      const mensajeElem = document.getElementById('mi-qr-mensaje');
+      mensajeElem.innerText = 'Cargando tu código...';
+      mensajeElem.className = 'status normal';
+      mensajeElem.style.display = 'block';
+
+      db.collection('permanentes').doc(permanenteId).get()
+        .then(function (doc) {
+          if (!doc.exists) {
+            try { localStorage.removeItem(MI_QR_STORAGE_KEY); } catch (e) {}
+            mostrarPantallaBusquedaMiQR_();
+            return;
+          }
+          const d = doc.data();
+          let guardado = null;
+          try { guardado = JSON.parse(localStorage.getItem(MI_QR_STORAGE_KEY) || 'null'); } catch (e) {}
+          mostrarMiQR_({ id: doc.id, nombre: d.nombre, parentesco: d.parentesco || '', activo: !!d.activo }, guardado ? guardado.correoAlumno : '');
+        })
+        .catch(function () {
+          mostrarPantallaBusquedaMiQR_();
+        });
+    }
+
+    function dibujarMiQR_() {
+      if (!miQrPermanenteId) return;
+      const contenido = JSON.stringify({ tipo: 'permanente', id: miQrPermanenteId, ts: Date.now() });
+      const contenedor = document.getElementById('mi-qr-codigo');
+      contenedor.innerHTML = '';
+      new QRCode(contenedor, {
+        text: utf8ParaQR_(contenido), width: 220, height: 220,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      miQrSegundosRestantes = MI_QR_VIGENCIA_SEGUNDOS;
+      const span = document.getElementById('mi-qr-segundos');
+      if (span) span.innerText = miQrSegundosRestantes;
+    }
+
+    function actualizarContadorMiQR_() {
+      const span = document.getElementById('mi-qr-segundos');
+      if (!span) return;
+      miQrSegundosRestantes = Math.max(0, miQrSegundosRestantes - 1);
+      span.innerText = miQrSegundosRestantes;
     }
 
     // ============================================================
