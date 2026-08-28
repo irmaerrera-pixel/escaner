@@ -297,6 +297,7 @@
     <button onclick="navegarA('vista-generar')"><span class="material-symbols-outlined">badge</span><small>Generar QR</small></button>
     <button onclick="navegarA('vista-evento')"><span class="material-symbols-outlined">campaign</span><small>Evento Masivo</small></button>
     <button onclick="navegarA('vista-historial')"><span class="material-symbols-outlined">history</span><small>Historial</small></button>
+    <button onclick="navegarA('vista-invitados')"><span class="material-symbols-outlined">group_add</span><small>Invitados</small></button>
   </nav>
 
   <!-- Vista Escáner -->
@@ -541,12 +542,12 @@ Ana Torres	Administración"></textarea>
 
   <!-- Vista Evento Masivo -->
   <main id="vista-evento" class="vista card" style="display: none;">
-    <h2>Activación Masiva por Evento</h2>
+    <h2>Evento Masivo</h2>
     <p style="font-size:0.85em; color:#495057; text-align:left;">
-      Para eventos con muchos papás (festivales, juntas generales, etc.).
-      Activa automáticamente todos los QR permanentes de un grupo/sección
-      (o de todos, si los dejas en blanco) a la hora de inicio, y los
-      desactiva a la hora de fin si la indicas.
+      Programa la fecha de un evento para habilitar que los papás (con su
+      cuenta de Google del colegio) registren desde la pestaña "Invitados"
+      a las personas adicionales que los acompañarán ese día. A cada
+      invitado se le genera un QR válido únicamente para la fecha del evento.
     </p>
     <div class="form-group">
       <label>Nombre del evento</label>
@@ -556,22 +557,6 @@ Ana Torres	Administración"></textarea>
       <label>Fecha</label>
       <input type="date" id="evento-fecha">
     </div>
-    <div class="form-group">
-      <label>Hora de inicio</label>
-      <input type="time" id="evento-hora-inicio">
-    </div>
-    <div class="form-group">
-      <label>Hora de fin (opcional, desactiva automáticamente)</label>
-      <input type="time" id="evento-hora-fin">
-    </div>
-    <div class="form-group">
-      <label>Grupo (opcional, deja en blanco para todos)</label>
-      <select id="evento-grupo" class="mayusculas-auto"><option value="">Todos los grupos</option></select>
-    </div>
-    <div class="form-group">
-      <label>Sección (opcional, deja en blanco para todas)</label>
-      <select id="evento-seccion" class="mayusculas-auto"><option value="">Todas las secciones</option></select>
-    </div>
     <button id="btn-programar-evento" onclick="programarEvento()">Programar Evento</button>
 
     <div id="evento-mensaje" class="status normal"></div>
@@ -579,9 +564,41 @@ Ana Torres	Administración"></textarea>
     <h3 style="margin-top:25px;">Eventos programados</h3>
     <table>
       <thead>
-        <tr><th>Evento</th><th>Fecha</th><th>Inicio</th><th>Fin</th><th>Grupo/Sección</th><th>Estado</th><th></th></tr>
+        <tr><th>Evento</th><th>Fecha</th><th>Estado</th><th></th></tr>
       </thead>
-      <tbody id="tabla-eventos"><tr><td colspan="7">Cargando...</td></tr></tbody>
+      <tbody id="tabla-eventos"><tr><td colspan="4">Cargando...</td></tr></tbody>
+    </table>
+  </main>
+
+  <!-- Vista Registro de Invitados (autoservicio para papás) -->
+  <main id="vista-invitados" class="vista card" style="display: none;">
+    <h2>Registrar Invitados</h2>
+    <p style="font-size:0.85em; color:#495057; text-align:left;">
+      Registra aquí a las personas adicionales que te acompañarán al
+      evento. Se generará un código QR válido únicamente el día del evento
+      para cada invitado.
+    </p>
+
+    <div class="form-group">
+      <label>Evento</label>
+      <select id="invitado-evento"><option value="">Selecciona un evento...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Nombre del invitado</label>
+      <input type="text" id="invitado-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
+    </div>
+    <button id="btn-registrar-invitado" onclick="registrarInvitado()">Registrar invitado y generar QR</button>
+
+    <div id="invitado-mensaje" class="status normal"></div>
+    <div id="invitado-resultado" style="display:none; margin-top:15px;">
+      <div id="invitado-qrcode" style="display:flex; justify-content:center;"></div><br>
+      <button onclick="descargarQRInvitado()" style="margin-top:10px;">Descargar QR</button>
+    </div>
+
+    <h3 style="margin-top:25px;">Mis invitados registrados</h3>
+    <table>
+      <thead><tr><th>Nombre</th><th>Evento</th><th>Fecha</th><th></th></tr></thead>
+      <tbody id="tabla-mis-invitados"><tr><td colspan="4">Cargando...</td></tr></tbody>
     </table>
   </main>
 
@@ -630,8 +647,12 @@ Ana Torres	Administración"></textarea>
     const db = firebase.firestore();
     const auth = firebase.auth();
     const proveedorGoogle = new firebase.auth.GoogleAuthProvider();
+    proveedorGoogle.setCustomParameters({ hd: 'colegiofrancespasteur.edu.mx' });
+
+    const DOMINIO_COLEGIO = '@colegiofrancespasteur.edu.mx';
 
     let rolActual = null;
+    let correoUsuarioActual = null;
     let appYaIniciada = false;
 
     // ============================================================
@@ -663,8 +684,17 @@ Ana Torres	Administración"></textarea>
       }
 
       const correo = (user.email || '').toLowerCase();
+      correoUsuarioActual = correo;
+
       db.collection('usuarios').doc(correo).get().then(function (doc) {
-        if (!doc.exists) {
+        if (doc.exists) {
+          rolActual = doc.data().rol;
+        } else if (correo.endsWith(DOMINIO_COLEGIO)) {
+          // Cualquier cuenta del dominio del colegio que no esté dada de alta
+          // como admin/checador/citas se trata como papá: solo puede
+          // registrar invitados para eventos.
+          rolActual = 'padre';
+        } else {
           const mensajeElem = document.getElementById('login-mensaje');
           mensajeElem.innerText = '⛔ Tu cuenta (' + correo + ') no tiene acceso autorizado a esta aplicación. Contacta al administrador.';
           mensajeElem.className = 'status error';
@@ -673,22 +703,25 @@ Ana Torres	Administración"></textarea>
           return;
         }
 
-        rolActual = doc.data().rol;
         pantallaLogin.style.display = 'none';
         appContenido.style.display = 'block';
 
-        document.getElementById('info-usuario').innerText = (rolActual === 'admin' ? 'Administrador' : rolActual === 'citas' ? 'Citas' : 'Checador');
+        document.getElementById('info-usuario').innerText =
+          (rolActual === 'admin' ? 'Administrador' : rolActual === 'citas' ? 'Eventos' : rolActual === 'padre' ? 'Padre de familia' : 'Checador');
         aplicarPermisosRol_();
 
         if (!appYaIniciada) {
           appYaIniciada = true;
-          iniciarScanner();
-          revisarEventosPendientes_();
-          revisarTarjetasVencidas_();
-          setInterval(function () {
-            revisarEventosPendientes_();
+          // El escáner y las tarjetas de visitante solo hacen falta para
+          // quien checa accesos; a los papás y a quien solo crea eventos
+          // no les corre esa parte en segundo plano.
+          if (rolActual === 'admin' || rolActual === 'checador') {
+            iniciarScanner();
             revisarTarjetasVencidas_();
-          }, 60000);
+            setInterval(function () {
+              revisarTarjetasVencidas_();
+            }, 60000);
+          }
         }
       }).catch(function (error) {
         const mensajeElem = document.getElementById('login-mensaje');
@@ -711,6 +744,9 @@ Ana Torres	Administración"></textarea>
       } else if (rolActual === 'citas') {
         botones.forEach(function (b, i) { b.style.display = (i === 3) ? 'flex' : 'none'; });
         navegarA('vista-evento');
+      } else if (rolActual === 'padre') {
+        botones.forEach(function (b, i) { b.style.display = (i === 5) ? 'flex' : 'none'; });
+        navegarA('vista-invitados');
       } else {
         botones.forEach(function (b) { b.style.display = 'flex'; });
         if (botones[0]) botones[0].classList.add('activo');
@@ -811,10 +847,11 @@ Ana Torres	Administración"></textarea>
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-tarjetas') renderizarTarjetas();
       if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
-      if (vistaId === 'vista-evento') { renderizarEventos(); renderizarPermanentes(); }
+      if (vistaId === 'vista-evento') { renderizarEventos(); }
+      if (vistaId === 'vista-invitados') { poblarSelectEventosActivos_(); renderizarMisInvitados(); }
 
       document.querySelectorAll('#nav-principal button').forEach(function (b) { b.classList.remove('activo'); });
-      const mapaNav = { 'vista-escaner': 0, 'vista-tarjetas': 1, 'vista-generar': 2, 'vista-evento': 3, 'vista-historial': 4 };
+      const mapaNav = { 'vista-escaner': 0, 'vista-tarjetas': 1, 'vista-generar': 2, 'vista-evento': 3, 'vista-historial': 4, 'vista-invitados': 5 };
       const botones = document.querySelectorAll('#nav-principal button');
       if (botones[mapaNav[vistaId]]) botones[mapaNav[vistaId]].classList.add('activo');
     }
@@ -1369,8 +1406,6 @@ Ana Torres	Administración"></textarea>
 
       llenarSelect_('buscar-grupo', 'Grupo (todos)', grupos);
       llenarSelect_('buscar-seccion', 'Sección (todas)', secciones);
-      llenarSelect_('evento-grupo', 'Todos los grupos', grupos);
-      llenarSelect_('evento-seccion', 'Todas las secciones', secciones);
     }
 
     function llenarSelect_(idSelect, textoDefault, valores) {
@@ -2126,20 +2161,16 @@ Ana Torres	Administración"></textarea>
     }
 
     // ============================================================
-    // EVENTOS MASIVOS (activación/desactivación por grupo o sección)
+    // EVENTOS MASIVOS (solo fecha, habilita el registro de invitados)
     // ============================================================
     function programarEvento() {
       const nombre = mayus_(document.getElementById('evento-nombre').value);
       const fecha = document.getElementById('evento-fecha').value;
-      const horaInicio = document.getElementById('evento-hora-inicio').value;
-      const horaFin = document.getElementById('evento-hora-fin').value;
-      const grupo = mayus_(document.getElementById('evento-grupo').value);
-      const seccion = mayus_(document.getElementById('evento-seccion').value);
       const mensajeElem = document.getElementById('evento-mensaje');
       const boton = document.getElementById('btn-programar-evento');
 
-      if (!nombre || !fecha || !horaInicio) {
-        mensajeElem.innerText = 'Completa al menos el nombre, la fecha y la hora de inicio.';
+      if (!nombre || !fecha) {
+        mensajeElem.innerText = 'Completa el nombre y la fecha del evento.';
         mensajeElem.className = 'status error';
         return;
       }
@@ -2148,121 +2179,194 @@ Ana Torres	Administración"></textarea>
       mensajeElem.innerText = 'Guardando evento...';
       mensajeElem.className = 'status normal';
 
-      db.collection('eventos').add({
-        nombre: nombre, fecha: fecha, horaInicio: horaInicio, horaFin: horaFin || null,
-        grupo: grupo || null, seccion: seccion || null,
-        activado: false, desactivado: false, creado: Date.now()
+      db.collection('eventos').add({ nombre: nombre, fecha: fecha, creado: Date.now() })
+        .then(function () {
+          mensajeElem.innerText = '✅ Evento "' + nombre + '" programado para ' + fecha + '. Ya pueden registrar invitados.';
+          mensajeElem.className = 'status exito';
+          document.getElementById('evento-nombre').value = '';
+          document.getElementById('evento-fecha').value = '';
+          boton.disabled = false;
+          renderizarEventos();
+        })
+        .catch(function (error) {
+          mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+          mensajeElem.className = 'status error';
+          boton.disabled = false;
+        });
+    }
+
+    function renderizarEventos() {
+      const tbody = document.getElementById('tabla-eventos');
+      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+      const hoy = fechaHoy();
+
+      db.collection('eventos').orderBy('fecha', 'desc').get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const e = doc.data();
+            const badge = e.fecha >= hoy
+              ? '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Registro abierto</span>'
+              : '<span class="badge inactivo"><span class="material-symbols-outlined">event_busy</span>Pasado</span>';
+            filas.push('<tr><td>' + e.nombre + '</td><td>' + e.fecha + '</td><td>' + badge + '</td>' +
+              '<td><button class="danger small" onclick="eliminarEvento(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">Sin eventos programados.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    function eliminarEvento(id) {
+      if (!confirm('¿Eliminar este evento? Los invitados ya registrados conservan su QR, pero ya no se podrán registrar más.')) return;
+      db.collection('eventos').doc(id).delete().then(renderizarEventos);
+    }
+
+    // ============================================================
+    // REGISTRO DE INVITADOS (autoservicio para papás)
+    // ============================================================
+    // Reutiliza la colección "permitidos" (la misma de "QR por Fecha"),
+    // así el escáner ya sabe validarlos sin ningún cambio: nombre + fecha
+    // del evento = QR válido solo ese día.
+    let qrInvitadoActual = null;
+
+    function poblarSelectEventosActivos_() {
+      const select = document.getElementById('invitado-evento');
+      if (!select) return;
+      const hoy = fechaHoy();
+
+      db.collection('eventos').where('fecha', '>=', hoy).orderBy('fecha', 'asc').get()
+        .then(function (snap) {
+          const opciones = ['<option value="">Selecciona un evento...</option>'];
+          snap.forEach(function (doc) {
+            const e = doc.data();
+            opciones.push('<option value="' + doc.id + '" data-nombre="' + e.nombre + '" data-fecha="' + e.fecha + '">' + e.nombre + ' (' + e.fecha + ')</option>');
+          });
+          select.innerHTML = opciones.join('') || '<option value="">No hay eventos próximos</option>';
+        })
+        .catch(function () {
+          select.innerHTML = '<option value="">Error al cargar eventos</option>';
+        });
+    }
+
+    function registrarInvitado() {
+      const select = document.getElementById('invitado-evento');
+      const opcionSeleccionada = select.options[select.selectedIndex];
+      const nombre = mayus_(document.getElementById('invitado-nombre').value);
+      const mensajeElem = document.getElementById('invitado-mensaje');
+      const boton = document.getElementById('btn-registrar-invitado');
+
+      if (!select.value || !nombre) {
+        mensajeElem.innerText = 'Selecciona el evento y escribe el nombre del invitado.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+      if (typeof QRCode === 'undefined') {
+        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
+        mensajeElem.className = 'status error';
+        return;
+      }
+
+      const nombreEvento = opcionSeleccionada.getAttribute('data-nombre');
+      const fechaEvento = opcionSeleccionada.getAttribute('data-fecha');
+
+      boton.disabled = true;
+      mensajeElem.innerText = 'Registrando...';
+      mensajeElem.className = 'status normal';
+
+      db.collection('permitidos').add({
+        nombre: nombre, fecha: fechaEvento, visita: nombreEvento,
+        registradoPor: correoUsuarioActual, creado: Date.now()
       }).then(function () {
-        mensajeElem.innerText = '✅ Evento "' + nombre + '" programado para ' + fecha + ' a las ' + horaInicio + '.';
+        const contenido = JSON.stringify({ nombre: nombre, fecha: fechaEvento });
+        const contenedor = document.getElementById('invitado-qrcode');
+        contenedor.innerHTML = '';
+
+        new QRCode(contenedor, {
+          text: utf8ParaQR_(contenido), width: 220, height: 220,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        document.getElementById('invitado-resultado').style.display = 'block';
+        mensajeElem.innerText = '✅ Invitado registrado: ' + nombre + ' (' + fechaEvento + ')';
         mensajeElem.className = 'status exito';
-        document.getElementById('evento-nombre').value = '';
-        document.getElementById('evento-fecha').value = '';
-        document.getElementById('evento-hora-inicio').value = '';
-        document.getElementById('evento-hora-fin').value = '';
-        document.getElementById('evento-grupo').value = '';
-        document.getElementById('evento-seccion').value = '';
+        qrInvitadoActual = { nombre: nombre, fecha: fechaEvento };
+        document.getElementById('invitado-nombre').value = '';
         boton.disabled = false;
-        renderizarEventos();
+        renderizarMisInvitados();
       }).catch(function (error) {
-        mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
+        mensajeElem.innerText = '⚠️ Error al registrar: ' + error.message;
         mensajeElem.className = 'status error';
         boton.disabled = false;
       });
     }
 
-    function renderizarEventos() {
-      const tbody = document.getElementById('tabla-eventos');
-      tbody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
+    function descargarQRInvitado() {
+      const contenedor = document.getElementById('invitado-qrcode');
+      const canvas = contenedor.querySelector('canvas');
+      const img = contenedor.querySelector('img');
+      const nombreArchivo = qrInvitadoActual
+        ? 'qr_invitado_' + qrInvitadoActual.nombre.replace(/\s+/g, '_') + '_' + qrInvitadoActual.fecha + '.png'
+        : 'qr_invitado.png';
 
-      db.collection('eventos').orderBy('creado', 'desc').get()
+      const link = document.createElement('a');
+      link.download = nombreArchivo;
+      if (canvas) link.href = canvas.toDataURL('image/png');
+      else if (img) link.href = img.src;
+      else { alert('Genera un código QR primero.'); return; }
+      link.click();
+    }
+
+    function renderizarMisInvitados() {
+      const tbody = document.getElementById('tabla-mis-invitados');
+      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+      if (!correoUsuarioActual) return;
+
+      db.collection('permitidos').where('registradoPor', '==', correoUsuarioActual).orderBy('creado', 'desc').get()
         .then(function (snap) {
           const filas = [];
           snap.forEach(function (doc) {
-            const e = doc.data();
-            let badge;
-            if (e.desactivado) badge = '<span class="badge inactivo"><span class="material-symbols-outlined">event_busy</span>Finalizado</span>';
-            else if (e.activado) badge = '<span class="badge activo"><span class="material-symbols-outlined">check_circle</span>Activo</span>';
-            else badge = '<span class="badge pendiente"><span class="material-symbols-outlined">schedule</span>Pendiente</span>';
-
-            const filtro = (e.grupo || e.seccion)
-              ? [e.grupo, e.seccion].filter(Boolean).join(' / ')
-              : 'Todos';
-
-            filas.push('<tr><td>' + e.nombre + '</td><td>' + e.fecha + '</td><td>' + e.horaInicio + '</td>' +
-              '<td>' + (e.horaFin || '-') + '</td><td>' + filtro + '</td><td>' + badge + '</td>' +
-              '<td><button class="danger small" onclick="eliminarEvento(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+            const p = doc.data();
+            const nombreEscapado = (p.nombre || '').replace(/'/g, "\\'");
+            filas.push('<tr><td>' + p.nombre + '</td><td>' + (p.visita || '-') + '</td><td>' + p.fecha + '</td>' +
+              '<td><button class="secondary small" onclick="regenerarQRInvitado(\'' + nombreEscapado + '\',\'' + p.fecha + '\')">Descargar QR</button></td></tr>');
           });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin eventos programados.</td></tr>';
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">Aún no has registrado invitados.</td></tr>';
         })
         .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="7">Error: ' + error.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
         });
     }
 
-    function eliminarEvento(id) {
-      if (!confirm('¿Eliminar este evento?')) return;
-      db.collection('eventos').doc(id).delete().then(renderizarEventos);
-    }
+    // Vuelve a dibujar el QR de un invitado ya registrado (no se guarda la
+    // imagen, se regenera al vuelo a partir de nombre+fecha) para poder
+    // descargarlo de nuevo desde "Mis invitados registrados".
+    function regenerarQRInvitado(nombre, fecha) {
+      if (typeof QRCode === 'undefined') { alert('No se pudo cargar la librería de QR.'); return; }
+      const contenido = JSON.stringify({ nombre: nombre, fecha: fecha });
+      const contenedorTemp = document.createElement('div');
+      contenedorTemp.style.display = 'none';
+      document.body.appendChild(contenedorTemp);
 
-    // Construye la consulta de permanentes según el grupo/sección del evento
-    // (si alguno está vacío, no filtra por ese campo = aplica a todos).
-    function consultaPermanentesPorFiltro_(grupo, seccion) {
-      let q = db.collection('permanentes');
-      if (grupo) q = q.where('grupo', '==', grupo);
-      if (seccion) q = q.where('seccion', '==', seccion);
-      return q.get();
-    }
+      new QRCode(contenedorTemp, {
+        text: utf8ParaQR_(contenido), width: 260, height: 260,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
 
-    // Revisa cada minuto si hay eventos que deban activarse (llegó su hora
-    // de inicio) o desactivarse (llegó su hora de fin), y aplica el cambio
-    // a todos los QR permanentes del grupo/sección indicado (o a todos).
-    async function revisarEventosPendientes_() {
-      try {
-        const ahora = Date.now();
-
-        const pendientesInicio = await db.collection('eventos').where('activado', '==', false).get();
-        for (const doc of pendientesInicio.docs) {
-          const e = doc.data();
-          const momentoInicio = new Date(e.fecha + 'T' + e.horaInicio).getTime();
-          if (ahora >= momentoInicio) {
-            const permanentesSnap = await consultaPermanentesPorFiltro_(e.grupo, e.seccion);
-            if (!permanentesSnap.empty) {
-              const lote = db.batch();
-              permanentesSnap.forEach(function (p) { lote.update(p.ref, { activo: true }); });
-              lote.update(doc.ref, { activado: true });
-              await lote.commit();
-            } else {
-              await doc.ref.update({ activado: true });
-            }
-          }
-        }
-
-        const pendientesFin = await db.collection('eventos')
-          .where('activado', '==', true)
-          .where('desactivado', '==', false)
-          .get();
-        for (const doc of pendientesFin.docs) {
-          const e = doc.data();
-          if (!e.horaFin) continue;
-          const momentoFin = new Date(e.fecha + 'T' + e.horaFin).getTime();
-          if (ahora >= momentoFin) {
-            const permanentesSnap = await consultaPermanentesPorFiltro_(e.grupo, e.seccion);
-            if (!permanentesSnap.empty) {
-              const lote = db.batch();
-              permanentesSnap.forEach(function (p) { lote.update(p.ref, { activo: false }); });
-              lote.update(doc.ref, { desactivado: true });
-              await lote.commit();
-            } else {
-              await doc.ref.update({ desactivado: true });
-            }
-          }
-        }
-
-        if (document.getElementById('vista-evento').style.display !== 'none') renderizarEventos();
-        if (document.getElementById('vista-generar').style.display !== 'none') renderizarPermanentes();
-      } catch (e) {
-        console.error('Error revisando eventos pendientes:', e);
-      }
+      setTimeout(function () {
+        const canvas = contenedorTemp.querySelector('canvas');
+        const img = contenedorTemp.querySelector('img');
+        const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+        document.body.removeChild(contenedorTemp);
+        if (!dataUrl) { alert('No se pudo generar el QR.'); return; }
+        const link = document.createElement('a');
+        link.download = 'qr_invitado_' + nombre.replace(/\s+/g, '_') + '_' + fecha + '.png';
+        link.href = dataUrl;
+        link.click();
+      }, 80);
     }
 
     // ============================================================
