@@ -213,8 +213,6 @@
       outline: none; border-color: var(--azul); background: var(--superficie);
     }
 
-    #gen-resultado { display: none; margin-top: 15px; }
-    #gen-qrcode { margin-top: 10px; display: flex; justify-content: center; }
     #genp-resultado { display: none; margin-top: 15px; }
     #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
 
@@ -342,47 +340,10 @@
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
     <nav id="menu-generar" style="margin-bottom:15px;">
-      <button onclick="navegarSubvista('subvista-fecha')"><span class="material-symbols-outlined">calendar_month</span> QR por Fecha</button>
       <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
       <button onclick="navegarSubvista('subvista-tarjetas-generar')"><span class="material-symbols-outlined">badge</span> Tarjetas Visitante</button>
     </nav>
-
-    <!-- Subvista: QR por Fecha -->
-    <div id="subvista-fecha" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
-      <div class="form-group">
-        <label>Nombre</label>
-        <input type="text" id="gen-nombre" class="mayusculas-auto" placeholder="Ej. Juan Pérez">
-      </div>
-      <div class="form-group">
-        <label>Fecha permitida de ingreso</label>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="date" id="gen-fecha" readonly style="flex:1;">
-          <button type="button" class="secondary small" onclick="habilitarCambioFecha_()" title="Cambiar fecha">
-            <span class="material-symbols-outlined">edit_calendar</span>
-          </button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Persona o evento al que asiste</label>
-        <input type="text" id="gen-visita" class="mayusculas-auto" placeholder="Ej. Orientación, Dirección, Junta de padres...">
-      </div>
-      <button id="btn-generar" onclick="generarQR()">Generar QR</button>
-      <button class="secondary" onclick="limpiarFormulario()">Nuevo</button>
-
-      <div id="gen-mensaje" class="status normal"></div>
-      <div id="gen-resultado">
-        <div id="gen-qrcode"></div><br>
-        <button onclick="descargarQR()" style="margin-top:10px;">Descargar QR</button>
-      </div>
-
-      <h3 style="margin-top:25px;">Personas permitidas</h3>
-      <table>
-        <thead><tr><th>Nombre</th><th>Fecha</th><th>Visita a</th><th></th></tr></thead>
-        <tbody id="tabla-permitidos"><tr><td colspan="4">Cargando...</td></tr></tbody>
-      </table>
-    </div>
 
     <!-- Subvista: QR Permanente -->
     <div id="subvista-permanente" class="subvista" style="display:none;">
@@ -884,7 +845,7 @@ Ana Torres	Administración"></textarea>
       document.getElementById(vistaId).style.display = 'block';
       if (vistaId === 'vista-historial') renderizarHistorial();
       if (vistaId === 'vista-tarjetas') renderizarTarjetas();
-      if (vistaId === 'vista-generar') { renderizarPermitidos(); renderizarPermanentes(); volverAlMenuGenerar(); }
+      if (vistaId === 'vista-generar') { renderizarPermanentes(); volverAlMenuGenerar(); }
       if (vistaId === 'vista-evento') { renderizarEventos(); }
       if (vistaId === 'vista-invitados') { poblarSelectEventosActivos_(); renderizarMisInvitados(); }
       if (vistaId === 'vista-mi-qr') { iniciarMiQR_(); }
@@ -899,25 +860,6 @@ Ana Torres	Administración"></textarea>
       document.getElementById('menu-generar').style.display = 'none';
       document.querySelectorAll('.subvista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(subvistaId).style.display = 'block';
-
-      if (subvistaId === 'subvista-fecha') bloquearFechaHoy_();
-    }
-
-    // Deja el campo de fecha fijo en "hoy" y bloqueado, para evitar
-    // errores por descuido. Se desbloquea con el botón de al lado.
-    function bloquearFechaHoy_() {
-      const campo = document.getElementById('gen-fecha');
-      campo.value = fechaHoy();
-      campo.setAttribute('readonly', 'readonly');
-    }
-
-    function habilitarCambioFecha_() {
-      const campo = document.getElementById('gen-fecha');
-      campo.removeAttribute('readonly');
-      campo.focus();
-      if (typeof campo.showPicker === 'function') {
-        try { campo.showPicker(); } catch (e) { /* algunos navegadores lo bloquean, no pasa nada */ }
-      }
     }
 
     function volverAlMenuGenerar() {
@@ -1230,108 +1172,6 @@ Ana Torres	Administración"></textarea>
         }
         return resultado;
       });
-    }
-
-    // ============================================================
-    // GENERAR QR
-    // ============================================================
-    let qrActual = null;
-
-    function generarQR() {
-      const nombre = mayus_(document.getElementById('gen-nombre').value);
-      const fecha = document.getElementById('gen-fecha').value;
-      const visita = mayus_(document.getElementById('gen-visita').value);
-      const mensajeElem = document.getElementById('gen-mensaje');
-      const boton = document.getElementById('btn-generar');
-
-      if (!nombre || !fecha || !visita) {
-        mensajeElem.innerText = 'Completa nombre, fecha, y persona/evento al que asiste.';
-        mensajeElem.className = 'status error';
-        return;
-      }
-      if (typeof QRCode === 'undefined') {
-        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
-        mensajeElem.className = 'status error';
-        return;
-      }
-
-      boton.disabled = true;
-      mensajeElem.innerText = 'Guardando en la lista de permitidos...';
-      mensajeElem.className = 'status normal';
-
-      db.collection('permitidos').add({ nombre: nombre, fecha: fecha, visita: visita, creado: Date.now() })
-        .then(function () {
-          const contenido = JSON.stringify({ nombre: nombre, fecha: fecha });
-          const contenedor = document.getElementById('gen-qrcode');
-          contenedor.innerHTML = '';
-
-          new QRCode(contenedor, {
-            text: utf8ParaQR_(contenido), width: 220, height: 220,
-            colorDark: '#000000', colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-          });
-
-          document.getElementById('gen-resultado').style.display = 'block';
-          mensajeElem.innerText = 'QR generado y agregado a permitidos: ' + nombre + ' (' + fecha + ')';
-          mensajeElem.className = 'status exito';
-          qrActual = { nombre: nombre, fecha: fecha };
-          boton.disabled = false;
-          renderizarPermitidos();
-        })
-        .catch(function (error) {
-          mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
-          mensajeElem.className = 'status error';
-          boton.disabled = false;
-        });
-    }
-
-    function descargarQR() {
-      const contenedor = document.getElementById('gen-qrcode');
-      const canvas = contenedor.querySelector('canvas');
-      const img = contenedor.querySelector('img');
-      const nombreArchivo = qrActual
-        ? 'qr_' + qrActual.nombre.replace(/\s+/g, '_') + '_' + qrActual.fecha + '.png'
-        : 'codigo_qr.png';
-
-      const link = document.createElement('a');
-      link.download = nombreArchivo;
-      if (canvas) link.href = canvas.toDataURL('image/png');
-      else if (img) link.href = img.src;
-      else { alert('Genera un código QR primero.'); return; }
-      link.click();
-    }
-
-    function limpiarFormulario() {
-      document.getElementById('gen-nombre').value = '';
-      document.getElementById('gen-visita').value = '';
-      document.getElementById('gen-qrcode').innerHTML = '';
-      document.getElementById('gen-resultado').style.display = 'none';
-      document.getElementById('gen-mensaje').innerText = '';
-      bloquearFechaHoy_();
-    }
-
-    function renderizarPermitidos() {
-      const tbody = document.getElementById('tabla-permitidos');
-      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
-      const hoy = fechaHoy();
-
-      db.collection('permitidos').where('fecha', '==', hoy).orderBy('creado', 'desc').get()
-        .then(function (snap) {
-          const filas = [];
-          snap.forEach(function (doc) {
-            const p = doc.data();
-            filas.push('<tr><td>' + p.nombre + '</td><td>' + p.fecha + '</td><td>' + (p.visita || '-') + '</td>' +
-              '<td><button class="danger small" onclick="eliminarPermitido(\'' + doc.id + '\')">Eliminar</button></td></tr>');
-          });
-          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">No hay códigos generados para hoy (' + hoy + ').</td></tr>';
-        })
-        .catch(function (error) {
-          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
-        });
-    }
-
-    function eliminarPermitido(id) {
-      db.collection('permitidos').doc(id).delete().then(renderizarPermitidos);
     }
 
     // ============================================================
