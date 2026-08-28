@@ -213,9 +213,6 @@
       outline: none; border-color: var(--azul); background: var(--superficie);
     }
 
-    #genp-resultado { display: none; margin-top: 15px; }
-    #genp-qrcode { margin-top: 10px; display: flex; justify-content: center; }
-
     hr { border: none; border-top: 1px solid var(--linea); }
     .mayusculas-auto { text-transform: uppercase; }
     input[readonly] { background: var(--superficie-tenue); color: var(--tinta-suave); }
@@ -425,8 +422,8 @@
         <input type="text" id="genp-seccion" class="mayusculas-auto" placeholder="Ej. A">
       </div>
       <div class="form-group">
-        <label>Correo (opcional, para el envío automático más adelante)</label>
-        <input type="email" id="genp-correo" class="mayusculas-auto" placeholder="Ej. maria@correo.com">
+        <label>Correo (cuenta de Google del alumno, para el Portal de Padres)</label>
+        <input type="email" id="genp-correo" class="mayusculas-auto" placeholder="Ej. alumno@colegiofrancespasteur.edu.mx">
       </div>
       <div class="form-group" style="display:flex; align-items:center; gap:8px;">
         <input type="checkbox" id="genp-entre-semana" style="width:auto;">
@@ -434,22 +431,15 @@
           Solo Lunes a Viernes (para personal que sale de las instalaciones)
         </label>
       </div>
-      <button id="btn-generar-permanente" onclick="generarQRPermanente()">Generar QR Permanente</button>
+      <button id="btn-generar-permanente" onclick="generarQRPermanente()">Guardar</button>
       <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
 
       <div id="genp-mensaje" class="status normal"></div>
-      <div id="genp-resultado">
-        <div id="genp-qrcode"></div><br>
-        <button onclick="descargarQRPermanente()" style="margin-top:10px;">Descargar QR</button>
-      </div>
 
       <h3 style="margin-top:25px;">Códigos permanentes</h3>
       <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; flex-wrap:wrap;">
         <button onclick="activarTodosPermanentes()">Activar visibles</button>
         <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar visibles</button>
-        <button id="btn-enviar-pendientes" class="secondary" onclick="enviarCorreosPendientes()">
-          <span class="material-symbols-outlined">forward_to_inbox</span> Enviar correos pendientes
-        </button>
       </div>
       <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         <input type="email" id="buscar-correo" placeholder="Correo..." style="flex:2; min-width:150px; padding:8px; border:1px solid #ccc; border-radius:4px;">
@@ -476,15 +466,14 @@
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
         una fila por alumno, en este orden:<br>
         <code>Correo del alumno &nbsp;|&nbsp; Grupo &nbsp;|&nbsp; Sección &nbsp;|&nbsp; Nombre de la mamá &nbsp;|&nbsp; Nombre del papá</code><br>
-        Se genera un QR para la mamá y otro para el papá por cada fila. Si falta un nombre, se omite ese QR.
+        Se registra a la mamá y al papá por cada fila (con ese mismo correo del alumno, para que puedan entrar al Portal de Padres). Si falta un nombre, se omite esa persona.
       </p>
       <div class="form-group">
         <textarea id="lote-texto" rows="6" class="mayusculas-auto" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
           placeholder="alumno1@correo.com	3	A	María López	Juan Pérez
 alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       </div>
-      <button id="btn-generar-lote" onclick="generarLote()">Generar todos</button>
-      <button id="btn-descargar-lote" class="secondary" style="display:none;" onclick="descargarLoteZip()">Descargar todos (ZIP)</button>
+      <button id="btn-generar-lote" onclick="generarLote()">Registrar todos</button>
 
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
@@ -1171,8 +1160,6 @@ Ana Torres	Administración"></textarea>
     // ============================================================
     // QR PERMANENTE (papás / tutores)
     // ============================================================
-    let qrPermanenteActual = null;
-
     function generarQRPermanente() {
       const nombre = mayus_(document.getElementById('genp-nombre').value);
       const parentesco = mayus_(document.getElementById('genp-parentesco').value);
@@ -1188,33 +1175,17 @@ Ana Torres	Administración"></textarea>
         mensajeElem.className = 'status error';
         return;
       }
-      if (typeof QRCode === 'undefined') {
-        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
-        mensajeElem.className = 'status error';
-        return;
-      }
 
       boton.disabled = true;
       mensajeElem.innerText = 'Guardando...';
       mensajeElem.className = 'status normal';
 
       db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, grupo: grupo || null, seccion: seccion || null, correo: correo || null, soloEntreSemana: soloEntreSemana, activo: true, creado: Date.now() })
-        .then(function (docRef) {
-          const contenido = JSON.stringify({ tipo: 'permanente', id: docRef.id, nombre: nombre });
-          const contenedor = document.getElementById('genp-qrcode');
-          contenedor.innerHTML = '';
-
-          new QRCode(contenedor, {
-            text: utf8ParaQR_(contenido), width: 220, height: 220,
-            colorDark: '#000000', colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-          });
-
-          document.getElementById('genp-resultado').style.display = 'block';
-          mensajeElem.innerText = 'QR permanente generado para: ' + nombre;
+        .then(function () {
+          mensajeElem.innerText = '✅ Guardado: ' + nombre + (correo ? ' — ya puede entrar al Portal de Padres con ' + correo : '');
           mensajeElem.className = 'status exito';
-          qrPermanenteActual = { nombre: nombre };
           boton.disabled = false;
+          limpiarCamposPermanente_();
           renderizarPermanentes();
         })
         .catch(function (error) {
@@ -1224,31 +1195,17 @@ Ana Torres	Administración"></textarea>
         });
     }
 
-    function descargarQRPermanente() {
-      const contenedor = document.getElementById('genp-qrcode');
-      const canvas = contenedor.querySelector('canvas');
-      const img = contenedor.querySelector('img');
-      const nombreArchivo = qrPermanenteActual
-        ? 'qr_permanente_' + qrPermanenteActual.nombre.replace(/\s+/g, '_') + '.png'
-        : 'qr_permanente.png';
-
-      const link = document.createElement('a');
-      link.download = nombreArchivo;
-      if (canvas) link.href = canvas.toDataURL('image/png');
-      else if (img) link.href = img.src;
-      else { alert('Genera un código QR primero.'); return; }
-      link.click();
-    }
-
-    function limpiarFormularioPermanente() {
+    function limpiarCamposPermanente_() {
       document.getElementById('genp-nombre').value = '';
       document.getElementById('genp-parentesco').value = '';
       document.getElementById('genp-grupo').value = '';
       document.getElementById('genp-seccion').value = '';
       document.getElementById('genp-correo').value = '';
       document.getElementById('genp-entre-semana').checked = false;
-      document.getElementById('genp-qrcode').innerHTML = '';
-      document.getElementById('genp-resultado').style.display = 'none';
+    }
+
+    function limpiarFormularioPermanente() {
+      limpiarCamposPermanente_();
       document.getElementById('genp-mensaje').innerText = '';
     }
 
@@ -1317,17 +1274,8 @@ Ana Torres	Administración"></textarea>
           ? '<button class="secondary small" onclick="toggleActivoPermanente(\'' + item.id + '\', true)">Desactivar</button>'
           : '<button class="small" onclick="toggleActivoPermanente(\'' + item.id + '\', false)">Activar</button>';
 
-        const nombreEscapado = (p.nombre || '').replace(/'/g, "\\'");
-        const parentescoEscapado = (p.parentesco || '').replace(/'/g, "\\'");
-        let botonCorreo = '';
-        if (p.correo) {
-          botonCorreo = p.correoEnviado
-            ? '<button class="secondary small" title="Volver a enviar" onclick="enviarCorreoIndividual(\'' + item.id + '\',\'' + nombreEscapado + '\',\'' + p.correo + '\',\'' + parentescoEscapado + '\')"><span class="material-symbols-outlined">mark_email_read</span> Reenviar</button>'
-            : '<button class="small" onclick="enviarCorreoIndividual(\'' + item.id + '\',\'' + nombreEscapado + '\',\'' + p.correo + '\',\'' + parentescoEscapado + '\')"><span class="material-symbols-outlined">mail</span> Enviar</button>';
-        }
-
         return '<tr><td>' + p.nombre + '</td><td>' + (p.parentesco || '-') + '</td><td>' + (p.grupo || '-') + '</td><td>' + (p.seccion || '-') + '</td><td>' + (p.correo || '-') + '</td><td>' + badge + badgeDias + '</td>' +
-          '<td>' + botonToggle + ' ' + botonCorreo + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
+          '<td>' + botonToggle + ' <button class="danger small" onclick="eliminarPermanente(\'' + item.id + '\')">Eliminar</button></td></tr>';
       });
       tbody.innerHTML = filas.join('') || '<tr><td colspan="7">Sin resultados.</td></tr>';
     }
@@ -1356,91 +1304,6 @@ Ana Torres	Administración"></textarea>
     function eliminarPermanente(id) {
       if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
       db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
-    }
-
-    // ============================================================
-    // ENVÍO DE QR POR CORREO (Apps Script + Gmail)
-    // ============================================================
-
-    // Regenera la imagen del QR (no la guardamos, la volvemos a dibujar
-    // cada vez que se necesita) y devuelve su dataURL en base64.
-    function generarImagenQR_(id, nombre) {
-      return new Promise(function (resolve, reject) {
-        if (typeof QRCode === 'undefined') { reject(new Error('Librería QR no disponible')); return; }
-        const contenedorTemp = document.createElement('div');
-        contenedorTemp.style.display = 'none';
-        document.body.appendChild(contenedorTemp);
-
-        const contenido = JSON.stringify({ tipo: 'permanente', id: id, nombre: nombre });
-        new QRCode(contenedorTemp, {
-          text: utf8ParaQR_(contenido), width: 260, height: 260,
-          colorDark: '#000000', colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-
-        setTimeout(function () {
-          const canvas = contenedorTemp.querySelector('canvas');
-          const img = contenedorTemp.querySelector('img');
-          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-          document.body.removeChild(contenedorTemp);
-          if (dataUrl) resolve(dataUrl); else reject(new Error('No se pudo generar el QR'));
-        }, 80);
-      });
-    }
-
-    // Genera el QR y lo envía por correo a través del servicio de Apps Script.
-    // Marca correoEnviado:true en Firestore si tiene éxito.
-    async function enviarCorreoQR_(id, nombre, correo, parentesco) {
-      const dataUrl = await generarImagenQR_(id, nombre);
-
-      const respuesta = await fetch(APPS_SCRIPT_EMAIL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ nombre: nombre, correo: correo, parentesco: parentesco || '', imagenBase64: dataUrl })
-      });
-      const resultado = await respuesta.json();
-      if (!resultado.ok) throw new Error(resultado.error || 'Error desconocido');
-
-      await db.collection('permanentes').doc(id).update({ correoEnviado: true });
-    }
-
-    function enviarCorreoIndividual(id, nombre, correo, parentesco) {
-      enviarCorreoQR_(id, nombre, correo, parentesco)
-        .then(function () { renderizarPermanentes(); })
-        .catch(function (error) { alert('⚠️ Error al enviar el correo: ' + error.message); });
-    }
-
-    // Envía todos los correos pendientes (que tienen correo y aún no se
-    // les ha enviado) DENTRO DE LA VISTA ACTUAL (respeta el filtro de
-    // grupo/sección/correo aplicado, igual que Activar/Desactivar visibles).
-    async function enviarCorreosPendientes() {
-      const pendientes = permanentesVistaActual.filter(function (item) {
-        return item.datos.correo && !item.datos.correoEnviado;
-      });
-
-      if (pendientes.length === 0) {
-        alert('No hay correos pendientes de enviar en la vista actual.');
-        return;
-      }
-      if (!confirm('¿Enviar ' + pendientes.length + ' correo(s) pendiente(s)?')) return;
-
-      const boton = document.getElementById('btn-enviar-pendientes');
-      if (boton) boton.disabled = true;
-
-      let exitosos = 0, fallidos = 0;
-      for (const item of pendientes) {
-        try {
-          await enviarCorreoQR_(item.id, item.datos.nombre, item.datos.correo, item.datos.parentesco);
-          exitosos++;
-        } catch (e) {
-          fallidos++;
-        }
-        await new Promise(function (r) { setTimeout(r, 300); });
-      }
-
-      if (boton) boton.disabled = false;
-      alert('Listo: ' + exitosos + ' enviado(s), ' + fallidos + ' con error.');
-      renderizarPermanentes();
     }
 
     // Activa o desactiva TODOS los códigos que están visibles actualmente
@@ -1483,24 +1346,16 @@ Ana Torres	Administración"></textarea>
     }
 
     // ============================================================
-    // GENERACIÓN EN LOTE (varios QR permanentes a la vez)
+    // REGISTRO EN LOTE — MAMÁ/PAPÁ (para el Portal de Padres)
     // ============================================================
-    window.loteQRs = []; // se llena al generar: [{nombre, correo, dataUrl}]
-
     async function generarLote() {
       const texto = document.getElementById('lote-texto').value.trim();
       const mensajeElem = document.getElementById('lote-mensaje');
       const contenedorResultados = document.getElementById('lote-resultados');
       const boton = document.getElementById('btn-generar-lote');
-      const botonDescargar = document.getElementById('btn-descargar-lote');
 
       if (!texto) {
         mensajeElem.innerText = 'Pega al menos un nombre.';
-        mensajeElem.className = 'status error';
-        return;
-      }
-      if (typeof QRCode === 'undefined') {
-        mensajeElem.innerText = '⚠️ No se pudo cargar la librería de generación de QR.';
         mensajeElem.className = 'status error';
         return;
       }
@@ -1513,12 +1368,11 @@ Ana Torres	Administración"></textarea>
       }
 
       boton.disabled = true;
-      botonDescargar.style.display = 'none';
       contenedorResultados.innerHTML = '';
-      window.loteQRs = [];
 
-      // Cada fila trae: correo del alumno, nombre de la mamá, nombre del papá.
-      // Detecta si viene separado por tabulador (al pegar de Excel) o por coma.
+      // Cada fila trae: correo del alumno, grupo, sección, nombre de la
+      // mamá, nombre del papá. Detecta si viene separado por tabulador
+      // (al pegar de Excel) o por coma.
       const lote = db.batch();
       const personas = [];
 
@@ -1533,12 +1387,12 @@ Ana Torres	Administración"></textarea>
         if (nombreMama) {
           const refMama = db.collection('permanentes').doc();
           lote.set(refMama, { nombre: nombreMama, parentesco: 'MAMÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
-          personas.push({ id: refMama.id, nombre: nombreMama });
+          personas.push({ nombre: nombreMama, parentesco: 'MAMÁ' });
         }
         if (nombrePapa) {
           const refPapa = db.collection('permanentes').doc();
           lote.set(refPapa, { nombre: nombrePapa, parentesco: 'PAPÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
-          personas.push({ id: refPapa.id, nombre: nombrePapa });
+          personas.push({ nombre: nombrePapa, parentesco: 'PAPÁ' });
         }
       });
 
@@ -1549,7 +1403,7 @@ Ana Torres	Administración"></textarea>
         return;
       }
 
-      mensajeElem.innerText = 'Guardando ' + personas.length + ' código(s) en la base de datos...';
+      mensajeElem.innerText = 'Guardando ' + personas.length + ' registro(s)...';
       mensajeElem.className = 'status normal';
 
       try {
@@ -1561,69 +1415,14 @@ Ana Torres	Administración"></textarea>
         return;
       }
 
-      // Genera visualmente cada QR (para vista previa y para el ZIP)
-      let pendientes = personas.length;
-
-      personas.forEach(function (persona) {
-        const contenido = JSON.stringify({ tipo: 'permanente', id: persona.id, nombre: persona.nombre });
-
-        const tarjeta = document.createElement('div');
-        tarjeta.style.cssText = 'display:inline-block; margin:8px; text-align:center; vertical-align:top; width:280px;';
-
-        const qrDiv = document.createElement('div');
-        tarjeta.appendChild(qrDiv);
-
-        const etiqueta = document.createElement('div');
-        etiqueta.style.cssText = 'font-size:0.8em; margin-top:4px; word-wrap:break-word;';
-        etiqueta.innerText = persona.nombre;
-        tarjeta.appendChild(etiqueta);
-
-        contenedorResultados.appendChild(tarjeta);
-
-        new QRCode(qrDiv, {
-          text: utf8ParaQR_(contenido), width: 260, height: 260,
-          colorDark: '#000000', colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-
-        // La librería dibuja de forma síncrona, pero damos un pequeño margen
-        // para asegurar que el canvas ya existe antes de leerlo.
-        setTimeout(function () {
-          const canvas = qrDiv.querySelector('canvas');
-          const img = qrDiv.querySelector('img');
-          const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-          window.loteQRs.push({ nombre: persona.nombre, dataUrl: dataUrl });
-
-          pendientes--;
-          if (pendientes === 0) {
-            mensajeElem.innerText = '✅ ' + personas.length + ' código(s) generado(s) y agregado(s) a permanentes.';
-            mensajeElem.className = 'status exito';
-            boton.disabled = false;
-            botonDescargar.style.display = 'inline-block';
-            renderizarPermanentes();
-          }
-        }, 60);
-      });
-    }
-
-    function descargarLoteZip() {
-      if (!window.loteQRs || window.loteQRs.length === 0) {
-        alert('Genera un lote primero.');
-        return;
-      }
-      const zip = new JSZip();
-      window.loteQRs.forEach(function (p) {
-        if (!p.dataUrl) return;
-        const base64 = p.dataUrl.split(',')[1];
-        const nombreArchivo = 'qr_' + p.nombre.replace(/\s+/g, '_') + '.png';
-        zip.file(nombreArchivo, base64, { base64: true });
-      });
-      zip.generateAsync({ type: 'blob' }).then(function (contenido) {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(contenido);
-        link.download = 'codigos_qr_permanentes.zip';
-        link.click();
-      });
+      mensajeElem.innerText = '✅ ' + personas.length + ' registro(s) guardado(s). Ya pueden entrar al Portal de Padres.';
+      mensajeElem.className = 'status exito';
+      contenedorResultados.innerHTML = personas.map(function (p) {
+        return '<div>' + p.nombre + ' (' + p.parentesco + ')</div>';
+      }).join('');
+      boton.disabled = false;
+      document.getElementById('lote-texto').value = '';
+      renderizarPermanentes();
     }
 
     // ============================================================
