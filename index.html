@@ -436,13 +436,13 @@
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
         una fila por alumno, en este orden:<br>
-        <code>Correo del alumno &nbsp;|&nbsp; Grupo &nbsp;|&nbsp; Sección &nbsp;|&nbsp; Nombre de la mamá &nbsp;|&nbsp; Nombre del papá</code><br>
-        Se registra a la mamá y al papá por cada fila (con ese mismo correo del alumno, para que puedan entrar al Portal de Padres). Si falta un nombre, se omite esa persona.
+        <code>Correo del alumno &nbsp;|&nbsp; Grupo &nbsp;|&nbsp; Sección &nbsp;|&nbsp; Nombre persona 1 &nbsp;|&nbsp; Parentesco persona 1 &nbsp;|&nbsp; Nombre persona 2 &nbsp;|&nbsp; Parentesco persona 2</code><br>
+        Se registran las dos personas de cada fila (con ese mismo correo del alumno, para que puedan entrar al Portal de Padres). Si el nombre de una persona viene vacío, esa persona simplemente se omite (no truena, solo no se crea su registro); el parentesco es opcional.
       </p>
       <div class="form-group">
         <textarea id="lote-texto" rows="6" class="mayusculas-auto" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;"
-          placeholder="alumno1@correo.com	3	A	María López	Juan Pérez
-alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
+          placeholder="alumno1@correo.com	3	A	María López	MAMÁ	Juan Pérez	PAPÁ
+alumno2@correo.com	5	B	Ana Torres	TUTORA	Carlos Ramírez	PAPÁ"></textarea>
       </div>
       <button id="btn-generar-lote" onclick="generarLote()">Registrar todos</button>
 
@@ -1267,17 +1267,23 @@ Ana Torres	Administración"></textarea>
     // Se distingue por lo que ya guarda cada lote: familia usa siempre
     // parentesco "MAMÁ"/"PAPÁ"; personal siempre queda con
     // soloEntreSemana=true y su parentesco es el puesto (nunca MAMÁ/PAPÁ).
+    // Como el parentesco ya es libre (no siempre "MAMÁ"/"PAPÁ"), la
+    // familia se distingue del personal por soloEntreSemana: el personal
+    // SIEMPRE lo trae en true; la familia nunca. Se filtra en el cliente
+    // (no con "where") para no perder registros antiguos que ni siquiera
+    // tengan ese campo guardado.
     function renderizarListaLoteFamilia_() {
       const tbody = document.getElementById('tabla-lote-familia');
       if (!tbody) return;
       tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
 
-      db.collection('permanentes').where('parentesco', 'in', ['MAMÁ', 'PAPÁ']).get()
+      db.collection('permanentes').get()
         .then(function (snap) {
           const filas = [];
           snap.forEach(function (doc) {
             const d = doc.data();
-            filas.push('<tr><td>' + d.nombre + '</td><td>' + d.parentesco + '</td><td>' + (d.correo || '-') + '</td>' +
+            if (d.soloEntreSemana === true) return; // esos son de personal
+            filas.push('<tr><td>' + d.nombre + '</td><td>' + (d.parentesco || '-') + '</td><td>' + (d.correo || '-') + '</td>' +
               '<td><button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
           });
           tbody.innerHTML = filas.join('') || '<tr><td colspan="4">No hay registros de mamá/papá.</td></tr>';
@@ -1290,10 +1296,10 @@ Ana Torres	Administración"></textarea>
     async function confirmarBorrarLoteFamilia() {
       if (!confirm('¿Borrar TODOS los registros de mamá/papá? Ya no podrán entrar al Portal de Padres. Esto no se puede deshacer.')) return;
 
-      const snap = await db.collection('permanentes').where('parentesco', 'in', ['MAMÁ', 'PAPÁ']).get();
-      if (snap.empty) { renderizarListaLoteFamilia_(); return; }
+      const snap = await db.collection('permanentes').get();
+      const docs = snap.docs.filter(function (doc) { return doc.data().soloEntreSemana !== true; });
+      if (docs.length === 0) { renderizarListaLoteFamilia_(); return; }
 
-      const docs = snap.docs;
       for (let i = 0; i < docs.length; i += 500) {
         const bloque = docs.slice(i, i + 500);
         const lote = db.batch();
@@ -1411,9 +1417,11 @@ Ana Torres	Administración"></textarea>
       boton.disabled = true;
       contenedorResultados.innerHTML = '';
 
-      // Cada fila trae: correo del alumno, grupo, sección, nombre de la
-      // mamá, nombre del papá. Detecta si viene separado por tabulador
-      // (al pegar de Excel) o por coma.
+      // Cada fila trae: correo del alumno, grupo, sección, nombre y
+      // parentesco de la persona 1, nombre y parentesco de la persona 2.
+      // Detecta si viene separado por tabulador (al pegar de Excel) o por
+      // coma. Si el nombre de una persona viene vacío, esa persona se
+      // omite (no truena); el parentesco es opcional.
       const lote = db.batch();
       const personas = [];
 
@@ -1422,23 +1430,25 @@ Ana Torres	Administración"></textarea>
         const correo = mayus_(partes[0] || '');
         const grupo = mayus_(partes[1] || '');
         const seccion = mayus_(partes[2] || '');
-        const nombreMama = mayus_(partes[3] || '');
-        const nombrePapa = mayus_(partes[4] || '');
+        const nombre1 = mayus_(partes[3] || '');
+        const parentesco1 = mayus_(partes[4] || '');
+        const nombre2 = mayus_(partes[5] || '');
+        const parentesco2 = mayus_(partes[6] || '');
 
-        if (nombreMama) {
-          const refMama = db.collection('permanentes').doc();
-          lote.set(refMama, { nombre: nombreMama, parentesco: 'MAMÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
-          personas.push({ nombre: nombreMama, parentesco: 'MAMÁ' });
+        if (nombre1) {
+          const ref1 = db.collection('permanentes').doc();
+          lote.set(ref1, { nombre: nombre1, parentesco: parentesco1 || null, correo: correo || null, grupo: grupo || null, seccion: seccion || null, soloEntreSemana: false, activo: true, creado: Date.now() });
+          personas.push({ nombre: nombre1, parentesco: parentesco1 });
         }
-        if (nombrePapa) {
-          const refPapa = db.collection('permanentes').doc();
-          lote.set(refPapa, { nombre: nombrePapa, parentesco: 'PAPÁ', correo: correo || null, grupo: grupo || null, seccion: seccion || null, activo: true, creado: Date.now() });
-          personas.push({ nombre: nombrePapa, parentesco: 'PAPÁ' });
+        if (nombre2) {
+          const ref2 = db.collection('permanentes').doc();
+          lote.set(ref2, { nombre: nombre2, parentesco: parentesco2 || null, correo: correo || null, grupo: grupo || null, seccion: seccion || null, soloEntreSemana: false, activo: true, creado: Date.now() });
+          personas.push({ nombre: nombre2, parentesco: parentesco2 });
         }
       });
 
       if (personas.length === 0) {
-        mensajeElem.innerText = 'No se encontró ningún nombre de mamá o papá en las filas.';
+        mensajeElem.innerText = 'No se encontró ningún nombre de persona 1 o persona 2 en las filas.';
         mensajeElem.className = 'status error';
         boton.disabled = false;
         return;
@@ -1459,7 +1469,7 @@ Ana Torres	Administración"></textarea>
       mensajeElem.innerText = '✅ ' + personas.length + ' registro(s) guardado(s). Ya pueden entrar al Portal de Padres.';
       mensajeElem.className = 'status exito';
       contenedorResultados.innerHTML = personas.map(function (p) {
-        return '<div>' + p.nombre + ' (' + p.parentesco + ')</div>';
+        return '<div>' + p.nombre + (p.parentesco ? ' (' + p.parentesco + ')' : '') + '</div>';
       }).join('');
       boton.disabled = false;
       document.getElementById('lote-texto').value = '';
