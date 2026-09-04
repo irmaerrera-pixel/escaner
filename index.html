@@ -401,47 +401,15 @@
   <main id="vista-generar" class="vista card" style="display: none;">
     <h2>Generar QR</h2>
     <nav id="menu-generar" style="margin-bottom:15px;">
-      <button onclick="navegarSubvista('subvista-permanente')"><span class="material-symbols-outlined">family_restroom</span> QR Permanente (Padres)</button>
       <button onclick="navegarSubvista('subvista-lote')"><span class="material-symbols-outlined">inventory_2</span> Generar en Lote</button>
       <button onclick="navegarSubvista('subvista-tarjetas-generar')"><span class="material-symbols-outlined">badge</span> Tarjetas Visitante</button>
     </nav>
 
-    <!-- Subvista: QR Permanente -->
-    <div id="subvista-permanente" class="subvista" style="display:none;">
+    <!-- Subvista: Generar en Lote -->
+    <div id="subvista-lote" class="subvista" style="display:none;">
       <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
-      <p style="font-size:0.85em; color:#495057;">Para papás/tutores. No caduca — tú lo activas o desactivas cuando quieras.</p>
-      <div class="form-group">
-        <label>Nombre</label>
-        <input type="text" id="genp-nombre" class="mayusculas-auto" placeholder="Ej. María López">
-      </div>
-      <div class="form-group">
-        <label>Parentesco (opcional)</label>
-        <input type="text" id="genp-parentesco" class="mayusculas-auto" placeholder="Ej. Mamá, Papá, Tutor">
-      </div>
-      <div class="form-group">
-        <label>Grupo (opcional)</label>
-        <input type="text" id="genp-grupo" class="mayusculas-auto" placeholder="Ej. 3">
-      </div>
-      <div class="form-group">
-        <label>Sección (opcional)</label>
-        <input type="text" id="genp-seccion" class="mayusculas-auto" placeholder="Ej. A">
-      </div>
-      <div class="form-group">
-        <label>Correo (cuenta de Google del alumno, para el Portal de Padres)</label>
-        <input type="email" id="genp-correo" class="mayusculas-auto" placeholder="Ej. alumno@colegiofrancespasteur.edu.mx">
-      </div>
-      <div class="form-group" style="display:flex; align-items:center; gap:8px;">
-        <input type="checkbox" id="genp-entre-semana" style="width:auto;">
-        <label for="genp-entre-semana" style="margin-bottom:0; text-transform:none; letter-spacing:normal; font-weight:600;">
-          Solo Lunes a Viernes (para personal que sale de las instalaciones)
-        </label>
-      </div>
-      <button id="btn-generar-permanente" onclick="generarQRPermanente()">Guardar</button>
-      <button class="secondary" onclick="limpiarFormularioPermanente()">Nuevo</button>
 
-      <div id="genp-mensaje" class="status normal"></div>
-
-      <h3 style="margin-top:25px;">Códigos permanentes</h3>
+      <h3>Códigos permanentes (mamá/papá y personal)</h3>
       <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; flex-wrap:wrap;">
         <button onclick="activarTodosPermanentes()">Activar visibles</button>
         <button class="secondary" onclick="desactivarTodosPermanentes()">Desactivar visibles</button>
@@ -461,12 +429,10 @@
         <thead><tr><th>Nombre</th><th>Parentesco</th><th>Grupo</th><th>Sección</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-permanentes"><tr><td colspan="7">Cargando...</td></tr></tbody>
       </table>
-    </div>
 
-    <!-- Subvista: Generar en Lote -->
-    <div id="subvista-lote" class="subvista" style="display:none;">
-      <button class="secondary" onclick="volverAlMenuGenerar()"><span class="material-symbols-outlined">arrow_back</span> Volver</button>
-      <h3>Generar en lote (varios a la vez)</h3>
+      <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
+
+      <h3 style="margin-top:25px;">Generar en lote (varios a la vez)</h3>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
         Pega tus filas directamente desde Excel (copiar y pegar conserva las columnas automáticamente),
         una fila por alumno, en este orden:<br>
@@ -1190,57 +1156,10 @@ Ana Torres	Administración"></textarea>
     }
 
     // ============================================================
-    // QR PERMANENTE (papás / tutores)
+    // ADMINISTRACIÓN DE PERMANENTES (mamá/papá y personal)
     // ============================================================
-    function generarQRPermanente() {
-      const nombre = mayus_(document.getElementById('genp-nombre').value);
-      const parentesco = mayus_(document.getElementById('genp-parentesco').value);
-      const grupo = mayus_(document.getElementById('genp-grupo').value);
-      const seccion = mayus_(document.getElementById('genp-seccion').value);
-      const correo = mayus_(document.getElementById('genp-correo').value);
-      const soloEntreSemana = document.getElementById('genp-entre-semana').checked;
-      const mensajeElem = document.getElementById('genp-mensaje');
-      const boton = document.getElementById('btn-generar-permanente');
-
-      if (!nombre) {
-        mensajeElem.innerText = 'Escribe un nombre.';
-        mensajeElem.className = 'status error';
-        return;
-      }
-
-      boton.disabled = true;
-      mensajeElem.innerText = 'Guardando...';
-      mensajeElem.className = 'status normal';
-
-      db.collection('permanentes').add({ nombre: nombre, parentesco: parentesco || null, grupo: grupo || null, seccion: seccion || null, correo: correo || null, soloEntreSemana: soloEntreSemana, activo: true, creado: Date.now() })
-        .then(function () {
-          mensajeElem.innerText = '✅ Guardado: ' + nombre + (correo ? ' — ya puede entrar al Portal de Padres con ' + correo : '');
-          mensajeElem.className = 'status exito';
-          boton.disabled = false;
-          limpiarCamposPermanente_();
-          renderizarPermanentes();
-        })
-        .catch(function (error) {
-          mensajeElem.innerText = '⚠️ Error al guardar: ' + error.message;
-          mensajeElem.className = 'status error';
-          boton.disabled = false;
-        });
-    }
-
-    function limpiarCamposPermanente_() {
-      document.getElementById('genp-nombre').value = '';
-      document.getElementById('genp-parentesco').value = '';
-      document.getElementById('genp-grupo').value = '';
-      document.getElementById('genp-seccion').value = '';
-      document.getElementById('genp-correo').value = '';
-      document.getElementById('genp-entre-semana').checked = false;
-    }
-
-    function limpiarFormularioPermanente() {
-      limpiarCamposPermanente_();
-      document.getElementById('genp-mensaje').innerText = '';
-    }
-
+    // El alta ahora solo se hace desde "Generar en Lote"; aquí se
+    // administra lo ya existente (activar/desactivar/eliminar/filtrar).
     let permanentesCache = [];
     let permanentesVistaActual = [];
 
