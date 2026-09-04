@@ -483,6 +483,17 @@ alumno2@correo.com	5	B	Ana Torres	Carlos Ramírez"></textarea>
       <div id="lote-mensaje" class="status normal"></div>
       <div id="lote-resultados" style="margin-top:15px; text-align:left;"></div>
 
+      <h3 style="margin-top:25px;">Ya registrados (mamá/papá)</h3>
+      <div style="display:flex; justify-content:center; margin-bottom:10px;">
+        <button class="danger" onclick="confirmarBorrarLoteFamilia()">
+          <span class="material-symbols-outlined">delete</span> Borrar todos los de mamá/papá
+        </button>
+      </div>
+      <table>
+        <thead><tr><th>Nombre</th><th>Parentesco</th><th>Correo</th><th></th></tr></thead>
+        <tbody id="tabla-lote-familia"><tr><td colspan="4">Cargando...</td></tr></tbody>
+      </table>
+
       <hr style="margin-top:30px; border:none; border-top:1px solid #ddd;">
 
       <h3 style="margin-top:25px;">Generar Personal en Lote (Lunes a Viernes)</h3>
@@ -502,6 +513,17 @@ Ana Torres	Administración"></textarea>
 
       <div id="lote-personal-mensaje" class="status normal"></div>
       <div id="lote-personal-resultados" style="margin-top:15px; text-align:left;"></div>
+
+      <h3 style="margin-top:25px;">Ya registrados (personal)</h3>
+      <div style="display:flex; justify-content:center; margin-bottom:10px;">
+        <button class="danger" onclick="confirmarBorrarLotePersonal()">
+          <span class="material-symbols-outlined">delete</span> Borrar todos los de personal
+        </button>
+      </div>
+      <table>
+        <thead><tr><th>Nombre</th><th>Puesto</th><th>Correo</th><th></th></tr></thead>
+        <tbody id="tabla-lote-personal"><tr><td colspan="4">Cargando...</td></tr></tbody>
+      </table>
     </div>
 
     <!-- Subvista: Generar Tarjetas Visitante -->
@@ -848,6 +870,11 @@ Ana Torres	Administración"></textarea>
       document.getElementById('menu-generar').style.display = 'none';
       document.querySelectorAll('.subvista').forEach(function (v) { v.style.display = 'none'; });
       document.getElementById(subvistaId).style.display = 'block';
+
+      if (subvistaId === 'subvista-lote') {
+        renderizarListaLoteFamilia_();
+        renderizarListaLotePersonal_();
+      }
     }
 
     function volverAlMenuGenerar() {
@@ -1308,7 +1335,97 @@ Ana Torres	Administración"></textarea>
 
     function eliminarPermanente(id) {
       if (!confirm('¿Eliminar este código permanente? Dejará de funcionar.')) return;
-      db.collection('permanentes').doc(id).delete().then(renderizarPermanentes);
+      db.collection('permanentes').doc(id).delete().then(function () {
+        renderizarPermanentes();
+        renderizarListaLoteFamilia_();
+        renderizarListaLotePersonal_();
+      });
+    }
+
+    // ============================================================
+    // BORRAR LO YA REGISTRADO EN LOTE (mamá/papá y personal)
+    // ============================================================
+    // Se distingue por lo que ya guarda cada lote: familia usa siempre
+    // parentesco "MAMÁ"/"PAPÁ"; personal siempre queda con
+    // soloEntreSemana=true y su parentesco es el puesto (nunca MAMÁ/PAPÁ).
+    function renderizarListaLoteFamilia_() {
+      const tbody = document.getElementById('tabla-lote-familia');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+
+      db.collection('permanentes').where('parentesco', 'in', ['MAMÁ', 'PAPÁ']).get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const d = doc.data();
+            filas.push('<tr><td>' + d.nombre + '</td><td>' + d.parentesco + '</td><td>' + (d.correo || '-') + '</td>' +
+              '<td><button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">No hay registros de mamá/papá.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    async function confirmarBorrarLoteFamilia() {
+      if (!confirm('¿Borrar TODOS los registros de mamá/papá? Ya no podrán entrar al Portal de Padres. Esto no se puede deshacer.')) return;
+
+      const snap = await db.collection('permanentes').where('parentesco', 'in', ['MAMÁ', 'PAPÁ']).get();
+      if (snap.empty) { renderizarListaLoteFamilia_(); return; }
+
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 500) {
+        const bloque = docs.slice(i, i + 500);
+        const lote = db.batch();
+        bloque.forEach(function (doc) { lote.delete(doc.ref); });
+        await lote.commit();
+      }
+
+      renderizarListaLoteFamilia_();
+      renderizarPermanentes();
+    }
+
+    function renderizarListaLotePersonal_() {
+      const tbody = document.getElementById('tabla-lote-personal');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+
+      db.collection('permanentes').where('soloEntreSemana', '==', true).get()
+        .then(function (snap) {
+          const filas = [];
+          snap.forEach(function (doc) {
+            const d = doc.data();
+            if (d.parentesco === 'MAMÁ' || d.parentesco === 'PAPÁ') return; // esos son de familia, no personal
+            filas.push('<tr><td>' + d.nombre + '</td><td>' + (d.parentesco || '-') + '</td><td>' + (d.correo || '-') + '</td>' +
+              '<td><button class="danger small" onclick="eliminarPermanente(\'' + doc.id + '\')">Eliminar</button></td></tr>');
+          });
+          tbody.innerHTML = filas.join('') || '<tr><td colspan="4">No hay registros de personal.</td></tr>';
+        })
+        .catch(function (error) {
+          tbody.innerHTML = '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
+        });
+    }
+
+    async function confirmarBorrarLotePersonal() {
+      if (!confirm('¿Borrar TODOS los registros de personal (Lunes a Viernes)? Esto no se puede deshacer.')) return;
+
+      const snap = await db.collection('permanentes').where('soloEntreSemana', '==', true).get();
+      const docs = snap.docs.filter(function (doc) {
+        const p = doc.data().parentesco;
+        return p !== 'MAMÁ' && p !== 'PAPÁ';
+      });
+      if (docs.length === 0) { renderizarListaLotePersonal_(); return; }
+
+      for (let i = 0; i < docs.length; i += 500) {
+        const bloque = docs.slice(i, i + 500);
+        const lote = db.batch();
+        bloque.forEach(function (doc) { lote.delete(doc.ref); });
+        await lote.commit();
+      }
+
+      renderizarListaLotePersonal_();
+      renderizarPermanentes();
     }
 
     // Activa o desactiva TODOS los códigos que están visibles actualmente
@@ -1428,6 +1545,7 @@ Ana Torres	Administración"></textarea>
       boton.disabled = false;
       document.getElementById('lote-texto').value = '';
       renderizarPermanentes();
+      renderizarListaLoteFamilia_();
     }
 
     // ============================================================
@@ -1536,6 +1654,7 @@ Ana Torres	Administración"></textarea>
             boton.disabled = false;
             botonDescargar.style.display = 'inline-block';
             renderizarPermanentes();
+            renderizarListaLotePersonal_();
           }
         }, 60);
       });
