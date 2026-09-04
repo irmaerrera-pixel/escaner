@@ -300,9 +300,18 @@
     <main id="portal-vista-codigos" class="vista card" style="margin-bottom:20px;">
       <h2>Mis Códigos de Acceso</h2>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
-        Se actualizan solos cada pocos segundos (en <span id="portal-segundos">30</span> s). No sirve
-        una captura de pantalla vieja: muéstralos directo desde aquí al llegar.
+        Se actualiza solo cada pocos segundos (en <span id="portal-segundos">30</span> s). No sirve
+        una captura de pantalla vieja: muéstralo directo desde aquí al llegar.
       </p>
+
+      <div id="portal-selector-persona" style="display:none; margin-bottom:15px;">
+        <div class="form-group">
+          <label>¿Quién va a entrar?</label>
+          <select id="portal-select-persona"></select>
+        </div>
+        <button class="secondary" onclick="seleccionarPersonaPortal()">Mostrar este código</button>
+      </div>
+
       <div id="portal-codigos"></div>
     </main>
 
@@ -2120,7 +2129,8 @@ Ana Torres	Administración"></textarea>
     // onAuthStateChanged los manda directo aquí usando su propio correo
     // ya autenticado — no hace falta pedirlo por escrito.
     const PORTAL_QR_VIGENCIA_SEGUNDOS = 30;
-    let portalRegistrosActivos = [];
+    let portalPersonasActivas = [];
+    let portalPersonaActual = null;
     let portalIntervaloRefresco = null;
     let portalIntervaloCuenta = null;
     let portalSegundosRestantes = PORTAL_QR_VIGENCIA_SEGUNDOS;
@@ -2184,45 +2194,73 @@ Ana Torres	Administración"></textarea>
     function detenerPortalQR_() {
       if (portalIntervaloRefresco) { clearInterval(portalIntervaloRefresco); portalIntervaloRefresco = null; }
       if (portalIntervaloCuenta) { clearInterval(portalIntervaloCuenta); portalIntervaloCuenta = null; }
-      portalRegistrosActivos = [];
+      portalPersonasActivas = [];
+      portalPersonaActual = null;
     }
 
+    // Si hay una sola persona activa, se muestra directo. Si hay varias
+    // (mamá, papá, tutor...), se le pide al papá elegir cuál de ellas es
+    // la que va a entrar, y solo se dibuja el QR de esa persona.
     function renderizarCodigosPortal_(registros) {
-      portalRegistrosActivos = registros.filter(function (r) { return r.activo; });
+      portalPersonasActivas = registros.filter(function (r) { return r.activo; });
       const contenedor = document.getElementById('portal-codigos');
+      const selectorWrap = document.getElementById('portal-selector-persona');
 
-      if (portalRegistrosActivos.length === 0) {
+      if (portalPersonasActivas.length === 0) {
         contenedor.innerHTML = '<p class="status error">Los códigos de esta cuenta están desactivados. Contacta a la administración.</p>';
+        selectorWrap.style.display = 'none';
         detenerPortalQR_();
         return;
       }
 
-      contenedor.innerHTML = portalRegistrosActivos.map(function (r, i) {
-        return '<div style="margin-bottom:20px; text-align:center;">' +
-          '<p style="font-weight:700; margin-bottom:6px;">' + r.nombre + (r.parentesco ? ' · ' + r.parentesco : '') + '</p>' +
-          '<div id="portal-qr-' + i + '" style="display:flex; justify-content:center;"></div>' +
-        '</div>';
-      }).join('');
+      if (portalPersonasActivas.length === 1) {
+        selectorWrap.style.display = 'none';
+        mostrarPersonaPortal_(portalPersonasActivas[0]);
+        return;
+      }
 
-      dibujarCodigosPortal_();
+      const select = document.getElementById('portal-select-persona');
+      select.innerHTML = portalPersonasActivas.map(function (r, i) {
+        const etiqueta = r.nombre + (r.parentesco ? ' (' + r.parentesco + ')' : '');
+        return '<option value="' + i + '">' + etiqueta + '</option>';
+      }).join('');
+      selectorWrap.style.display = 'block';
+
+      mostrarPersonaPortal_(portalPersonasActivas[0]);
+    }
+
+    function seleccionarPersonaPortal() {
+      const select = document.getElementById('portal-select-persona');
+      const persona = portalPersonasActivas[Number(select.value)];
+      if (persona) mostrarPersonaPortal_(persona);
+    }
+
+    function mostrarPersonaPortal_(persona) {
+      portalPersonaActual = persona;
+      const contenedor = document.getElementById('portal-codigos');
+      contenedor.innerHTML =
+        '<div style="text-align:center;">' +
+          '<p style="font-weight:700; margin-bottom:6px;">' + persona.nombre + (persona.parentesco ? ' · ' + persona.parentesco : '') + '</p>' +
+          '<div id="portal-qr-actual" style="display:flex; justify-content:center;"></div>' +
+        '</div>';
+
+      dibujarCodigoPortalActual_();
       if (portalIntervaloRefresco) clearInterval(portalIntervaloRefresco);
       if (portalIntervaloCuenta) clearInterval(portalIntervaloCuenta);
-      portalIntervaloRefresco = setInterval(dibujarCodigosPortal_, PORTAL_QR_VIGENCIA_SEGUNDOS * 1000);
+      portalIntervaloRefresco = setInterval(dibujarCodigoPortalActual_, PORTAL_QR_VIGENCIA_SEGUNDOS * 1000);
       portalIntervaloCuenta = setInterval(actualizarContadorPortal_, 1000);
     }
 
-    function dibujarCodigosPortal_() {
-      if (typeof QRCode === 'undefined') return;
-      portalRegistrosActivos.forEach(function (r, i) {
-        const contenedor = document.getElementById('portal-qr-' + i);
-        if (!contenedor) return;
-        const contenido = JSON.stringify({ tipo: 'permanente', id: r.id, ts: Date.now() });
-        contenedor.innerHTML = '';
-        new QRCode(contenedor, {
-          text: utf8ParaQR_(contenido), width: 200, height: 200,
-          colorDark: '#000000', colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
+    function dibujarCodigoPortalActual_() {
+      if (!portalPersonaActual || typeof QRCode === 'undefined') return;
+      const contenedor = document.getElementById('portal-qr-actual');
+      if (!contenedor) return;
+      const contenido = JSON.stringify({ tipo: 'permanente', id: portalPersonaActual.id, ts: Date.now() });
+      contenedor.innerHTML = '';
+      new QRCode(contenedor, {
+        text: utf8ParaQR_(contenido), width: 200, height: 200,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
       });
       portalSegundosRestantes = PORTAL_QR_VIGENCIA_SEGUNDOS;
       const span = document.getElementById('portal-segundos');
