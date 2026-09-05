@@ -1003,7 +1003,8 @@ Ana Torres	Administración"></textarea>
         datos = JSON.parse(datosQR);
       } catch (e) {
         await registrarNoAutorizado_('Código no reconocido');
-        return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
+        const adelanto = (datosQR || '').toString().slice(0, 40);
+        return { tipo: 'invalido', mensaje: '⛔ Código no válido (no se pudo leer bien, prueba de nuevo): ' + adelanto };
       }
 
       // --- QR PERMANENTE (papás/tutores) ---
@@ -1076,7 +1077,7 @@ Ana Torres	Administración"></textarea>
       const fecha = datos.fecha;
       if (!nombre || !fecha) {
         await registrarNoAutorizado_('Código no reconocido');
-        return { tipo: 'invalido', mensaje: '⛔ Código no válido' };
+        return { tipo: 'invalido', mensaje: '⛔ Código no reconocido (tipo desconocido: ' + (datos.tipo || 'sin tipo') + ')' };
       }
 
       const hoy = fechaHoy();
@@ -2258,9 +2259,9 @@ Ana Torres	Administración"></textarea>
       const contenido = JSON.stringify({ tipo: 'permanente', id: portalPersonaActual.id, ts: Date.now() });
       contenedor.innerHTML = '';
       new QRCode(contenedor, {
-        text: utf8ParaQR_(contenido), width: 200, height: 200,
+        text: utf8ParaQR_(contenido), width: 260, height: 260,
         colorDark: '#000000', colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
+        correctLevel: QRCode.CorrectLevel.H
       });
       portalSegundosRestantes = PORTAL_QR_VIGENCIA_SEGUNDOS;
       const span = document.getElementById('portal-segundos');
