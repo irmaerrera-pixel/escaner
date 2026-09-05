@@ -300,7 +300,7 @@
     <main id="portal-vista-codigos" class="vista card" style="margin-bottom:20px;">
       <h2>Mis Códigos de Acceso</h2>
       <p style="font-size:0.85em; color:#495057; text-align:left;">
-        Se actualiza solo cada pocos segundos (en <span id="portal-segundos">30</span> s). No sirve
+        Se actualiza solo cada pocos segundos (en <span id="portal-segundos">60</span> s). No sirve
         una captura de pantalla vieja: muéstralo directo desde aquí al llegar.
       </p>
 
@@ -1028,7 +1028,7 @@ Ana Torres	Administración"></textarea>
         // o enviados por correo) no llevan "ts" y siguen sin caducar.
         if (typeof datos.ts === 'number') {
           const antiguedadSegundos = (Date.now() - datos.ts) / 1000;
-          if (antiguedadSegundos > 90 || antiguedadSegundos < -30) {
+          if (antiguedadSegundos > 150 || antiguedadSegundos < -30) {
             await registrarNoAutorizado_(datosPermanente.nombre);
             return { tipo: 'no_autorizado', mensaje: '⛔ Código expirado: pide que ' + datosPermanente.nombre + ' vuelva a abrir su QR en la app' };
           }
@@ -2129,7 +2129,7 @@ Ana Torres	Administración"></textarea>
     // los QR de la familia). Al no estar dada de alta en "usuarios",
     // onAuthStateChanged los manda directo aquí usando su propio correo
     // ya autenticado — no hace falta pedirlo por escrito.
-    const PORTAL_QR_VIGENCIA_SEGUNDOS = 30;
+    const PORTAL_QR_VIGENCIA_SEGUNDOS = 60;
     let portalPersonasActivas = [];
     let portalPersonaActual = null;
     let portalIntervaloRefresco = null;
